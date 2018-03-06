@@ -11,12 +11,6 @@ namespace OBSChatBot
     {
         static void Main(string[] args)
         {
-            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Oxcha").ToString();
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
             Client client = AuthenticateLogin(args);
             if (client != null)
             {
@@ -26,18 +20,43 @@ namespace OBSChatBot
 
         private static Client AuthenticateLogin(string[] args)
         {
+            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
             Console.WriteLine("Login user: ");
             string user = Console.ReadLine();
 
             bool newToken = false;
             IAuthenticationResult authResponse;
 
-            Dictionary<string, string> UserAccessToken = new Dictionary<string, string>(); //TODO: read access token
-            if (UserAccessToken.ContainsKey(user))
+            string accessToken = string.Empty;
+
+            #region read accesToken
+            string path = directory + "/Token.txt";
+            if (File.Exists(path))
+            {
+                try
+                {   // Open the text file using a stream reader.
+                    using (StreamReader sr = new StreamReader(path))
+                    {
+                        accessToken = sr.ReadLine();
+                    }
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("The file could not be read: {0}", e.Message);
+                } 
+            }
+            #endregion
+
+            if (!string.IsNullOrWhiteSpace(accessToken))
             {
                 //TODO: Refresh access token https://dev.twitch.tv/docs/authentication#refreshing-access-tokens
                 //TODO: Token validieren
-                authResponse = new SuccessfulAuthentication(user, UserAccessToken[user]);
+                authResponse = new SuccessfulAuthentication(user, accessToken);
 
                 //TODO: nicht in else, da es auch aufgerufen werden muss wenn das token nicht mehr gültig ist
             }
@@ -67,7 +86,8 @@ namespace OBSChatBot
                 // When new Token add Token
                 if (newToken)
                 {
-                    //TODO: save token 
+                    //TODO: save token
+                    File.WriteAllLines(path, new[] { success.Token });
                 }
 
                 Console.WriteLine("Authentication Success");
@@ -86,6 +106,20 @@ namespace OBSChatBot
                 Console.ReadKey();
             }
             return null;
+        }
+
+        private static void TextHandling(Client client)
+        {
+            string channel = Console.ReadLine();
+
+            CliChannelHandler channelHandler = new CliChannelHandler();
+            client.JoinChannel(channel, channelHandler);
+
+            bool exit = false;
+            while (!exit)
+            {
+
+            }
         }
     }
 }
