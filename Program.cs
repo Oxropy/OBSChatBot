@@ -14,7 +14,7 @@ namespace OBSChatBot
             Client client = AuthenticateLogin(args);
             if (client != null)
             {
-                //TODO: Handling
+                TextHandling(client);
             }
         }
 
@@ -66,6 +66,7 @@ namespace OBSChatBot
                 {
                     Console.WriteLine("Too few arguments!");
                     Console.WriteLine("Usage: {0} <client id> <client secret>", Environment.GetCommandLineArgs()[0]);
+                    Console.ReadKey();
                     Environment.Exit(1);
                     return null;
                 }
@@ -110,16 +111,45 @@ namespace OBSChatBot
 
         private static void TextHandling(Client client)
         {
+            Console.WriteLine("Connect to channel:");
             string channel = Console.ReadLine();
 
-            CliChannelHandler channelHandler = new CliChannelHandler();
+            // Configure vote
+            Console.WriteLine("Voting action:");
+            string action = Console.ReadLine();
+
+            Console.WriteLine("Choices, seperate by '|':");
+            string[] choices = Console.ReadLine().Split('|');
+
+            Console.WriteLine("Vote time in milliseconds:");
+            string input = Console.ReadLine();
+
+            int milliseconds;
+            while (int.TryParse(input, out milliseconds) && milliseconds > 10000)
+            {
+                Console.WriteLine("Vote time in milliseconds (> 10000):");
+                input = Console.ReadLine();
+            }
+
+            Voting votes = new Voting(action, choices);
+            
+            CliChannelHandler channelHandler = new CliChannelHandler(votes, milliseconds);
             client.JoinChannel(channel, channelHandler);
 
             bool exit = false;
             while (!exit)
             {
+                input = Console.ReadLine();
+                exit = input == "!exit";
 
+                if (input == "!info")
+                {
+                    Console.WriteLine(string.Format("Action: {0}, choices: {1}", votes.ActionName, string.Join(" | ", votes.Votes)));
+                }
             }
+
+            client.LeaveChannel(channel);
+            client.Disconnect();
         }
     }
 }

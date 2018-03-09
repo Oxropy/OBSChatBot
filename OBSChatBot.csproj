@@ -99,6 +99,7 @@
     <Compile Include="Twitch\Client.cs" />
     <Compile Include="Twitch\IChannelHandler.cs" />
     <Compile Include="Twitch\IClientHandler.cs" />
+    <Compile Include="Voting.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
