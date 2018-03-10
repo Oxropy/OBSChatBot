@@ -125,15 +125,17 @@ namespace OBSChatBot
             string input = Console.ReadLine();
 
             int milliseconds;
-            while (int.TryParse(input, out milliseconds) && milliseconds > 10000)
+            while (!int.TryParse(input, out milliseconds) || milliseconds < 10000)
             {
-                Console.WriteLine("Vote time in milliseconds (> 10000):");
+                Console.WriteLine("Vote time in milliseconds (>= 10000):");
                 input = Console.ReadLine();
             }
 
             Voting votes = new Voting(action, choices);
+            VotingHandler votings = new VotingHandler();
+            votings.AddVoting(votes);
             
-            CliChannelHandler channelHandler = new CliChannelHandler(votes, milliseconds);
+            CliChannelHandler channelHandler = new CliChannelHandler(votings, milliseconds);
             client.JoinChannel(channel, channelHandler);
 
             bool exit = false;

@@ -10,14 +10,14 @@ namespace OBSChatBot.Handler
     public class CliChannelHandler : IChannelHandler
     {
         public readonly int Milliseconds;
-        public readonly Voting Votes;
+        public readonly VotingHandler Votings;
         BackgroundWorker bg = new BackgroundWorker();
         
-        public CliChannelHandler(Voting votes, int milliseconds)
+        public CliChannelHandler(VotingHandler votings, int milliseconds)
         {
             Milliseconds = milliseconds;
-            Votes = votes;
-
+            Votings = votings;
+            
             bg.DoWork += new DoWorkEventHandler(bg_DoWork);
             bg.RunWorkerCompleted += new RunWorkerCompletedEventHandler(bg_RunWorkerCompleted);
         }
@@ -36,15 +36,20 @@ namespace OBSChatBot.Handler
         {
             Console.WriteLine("{0}: {1}", msg.DisplayName, msg.Message);
             string message = msg.Message;
-            if (message.StartsWith("!vote "))
+            string[] parts = message.Split(' ');
+            if (parts.Length <= 2) return;
+
+            if (parts[0] == "!vote")
             {
+                string action = parts[1];
+                string vote = parts[2];
+
                 if (!bg.IsBusy)
                 {
-                    bg.RunWorkerAsync(Milliseconds);
+                    bg.RunWorkerAsync(new Tuple<int, string>(Milliseconds, action));
                 }
-
-                string vote = message.Remove(0, 6);
-                Votes.AddVote(vote);
+                
+                Votings.AddVote(action, vote);
             }
         }
 
@@ -62,15 +67,17 @@ namespace OBSChatBot.Handler
         void bg_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
             Console.WriteLine("Vote ends!");
-            var result = Votes.GetResult().ToList();
-            Votes.ResetVotes();
+            var result = Votings.GetResult(e.Result.ToString()).ToList();
+            Votings.ResetVoting(e.Result.ToString());
 
             Console.WriteLine("Winner: {0}", result[0]);
         }
 
         static void bg_DoWork(object sender, DoWorkEventArgs e)
         {
-            Thread.Sleep((int)e.Argument);
+            Tuple<int, string> info = (Tuple<int, string>)e.Argument;
+            Thread.Sleep(info.Item1);
+            e.Result = info.Item2;
         }
     }
 }

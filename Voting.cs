@@ -42,12 +42,54 @@ namespace OBSChatBot
 
         public void ResetVotes()
         {
-            var keys = Votes.Keys;
+            // ToList for new instance
+            var keys = Votes.Keys.ToList();
 
             foreach (var key in keys)
             {
                 Votes[key] = 0;
             }
+        }
+    }
+
+    public class VotingHandler
+    {
+        Dictionary<string, Voting> Votings = new Dictionary<string, Voting>();
+
+        public void AddVoting(string action, IEnumerable<string> choices)
+        {
+            Voting voting = new Voting(action, choices);
+
+            AddVoting(voting);
+        }
+
+        public void AddVoting(Voting voting)
+        {
+            if (Votings.ContainsKey(voting.ActionName))
+            {
+                Console.WriteLine("Voting exists already!");
+                return;
+            }
+
+            Votings.Add(voting.ActionName, voting);
+        }
+
+        public void AddVote(string action, string vote)
+        {
+            if (Votings.ContainsKey(action))
+            {
+                Votings[action].AddVote(vote); 
+            }
+        }
+
+        public IEnumerable<string> GetResult(string action)
+        {
+            return Votings[action].GetResult();
+        }
+
+        public void ResetVoting(string action)
+        {
+            Votings[action].ResetVotes();
         }
     }
 }

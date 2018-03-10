@@ -39,7 +39,7 @@ namespace OBSChatBot.Resources {
         internal static global::System.Resources.ResourceManager ResourceManager {
             get {
                 if (object.ReferenceEquals(resourceMan, null)) {
-                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("Twitchat.Resources.TwitchResource", typeof(TwitchResource).Assembly);
+                    global::System.Resources.ResourceManager temp = new global::System.Resources.ResourceManager("OBSChatBot.Resources.TwitchResource", typeof(TwitchResource).Assembly);
                     resourceMan = temp;
                 }
                 return resourceMan;
