@@ -2,8 +2,8 @@
 using System.ComponentModel;
 using System.Threading;
 using OBSChatBot.Twitch;
-using TwitchLib.Models.Client;
 using System.Linq;
+using TwitchLib.Client.Models;
 
 namespace OBSChatBot.Handler
 {
@@ -64,7 +64,7 @@ namespace OBSChatBot.Handler
         }
 
 
-        void bg_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
+        private void bg_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
             Console.WriteLine("Vote ends!");
             var result = Votings.GetResult(e.Result.ToString()).ToList();
@@ -73,7 +73,7 @@ namespace OBSChatBot.Handler
             Console.WriteLine("Winner: {0}", result[0]);
         }
 
-        static void bg_DoWork(object sender, DoWorkEventArgs e)
+        private static void bg_DoWork(object sender, DoWorkEventArgs e)
         {
             Tuple<int, string> info = (Tuple<int, string>)e.Argument;
             Thread.Sleep(info.Item1);

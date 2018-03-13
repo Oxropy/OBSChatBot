@@ -1,4 +1,4 @@
-﻿using TwitchLib.Models.Client;
+﻿using TwitchLib.Client.Models;
 
 namespace OBSChatBot.Twitch
 {
