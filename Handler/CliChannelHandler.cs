@@ -12,11 +12,13 @@ namespace OBSChatBot.Handler
         public readonly int Milliseconds;
         public readonly VotingHandler Votings;
         BackgroundWorker bg = new BackgroundWorker();
+        OBSWebsocketHandler ObsHandler;
         
-        public CliChannelHandler(VotingHandler votings, int milliseconds)
+        public CliChannelHandler(VotingHandler votings, int milliseconds, OBSWebsocketHandler obsHandler)
         {
             Milliseconds = milliseconds;
             Votings = votings;
+            ObsHandler = obsHandler;
             
             bg.DoWork += new DoWorkEventHandler(bg_DoWork);
             bg.RunWorkerCompleted += new RunWorkerCompletedEventHandler(bg_RunWorkerCompleted);
@@ -71,6 +73,7 @@ namespace OBSChatBot.Handler
             Votings.ResetVoting(e.Result.ToString());
 
             Console.WriteLine("Winner: {0}", result[0]);
+            ObsHandler.SetScene(result[0]);
         }
 
         private static void bg_DoWork(object sender, DoWorkEventArgs e)

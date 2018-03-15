@@ -18,10 +18,8 @@ namespace OBSChatBot.Twitch
             this.User = user;
             this.handler = handler;
             var credentials = new ConnectionCredentials(user, accesToken);
-            client = new TwitchClient
-            {
-                ConnectionCredentials = credentials
-            };
+            client = new TwitchClient();
+            client.Initialize(credentials);
 
             client.OnJoinedChannel += Client_OnJoinedChannel;
             client.OnMessageReceived += Client_OnMessageReceived;

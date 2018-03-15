@@ -134,8 +134,15 @@ namespace OBSChatBot
             Voting votes = new Voting(action, choices);
             VotingHandler votings = new VotingHandler();
             votings.AddVoting(votes);
+
+            Console.WriteLine("Web socket IP:");
+            string uri = Console.ReadLine();
+            Console.WriteLine("Web socket password: ");
+            string pw = Console.ReadLine();
+
+            OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
             
-            CliChannelHandler channelHandler = new CliChannelHandler(votings, milliseconds);
+            CliChannelHandler channelHandler = new CliChannelHandler(votings, milliseconds, obsHandler);
             client.JoinChannel(channel, channelHandler);
 
             bool exit = false;

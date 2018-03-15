@@ -11,7 +11,7 @@ namespace OBSChatBot
     {
         public readonly OBSWebsocket Obs;
 
-        public OBSWebsocketHandler(string ip, string password)
+        public OBSWebsocketHandler(string uri, string password)
         {
             Obs = new OBSWebsocket();
 
@@ -29,7 +29,12 @@ namespace OBSChatBot
 
             Obs.StreamStatus += onStreamData;
 
-            Obs.Connect(ip, password);
+            Obs.Connect(uri, password);
+        }
+
+        public void SetScene(string scene)
+        {
+            Obs.SetCurrentScene(scene);
         }
 
         private void onConnect(object sender, EventArgs e)
