@@ -37,6 +37,11 @@ namespace OBSChatBot
             Obs.SetCurrentScene(scene);
         }
 
+        public List<OBSScene> GetSceneList()
+        {
+            return Obs.ListScenes();
+        }
+
         private void onConnect(object sender, EventArgs e)
         {
 

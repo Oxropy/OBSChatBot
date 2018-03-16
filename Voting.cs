@@ -91,5 +91,10 @@ namespace OBSChatBot
         {
             Votings[action].ResetVotes();
         }
+
+        public Voting GetVotingInfo(string voting)
+        {
+            return Votings[voting];
+        }
     }
 }

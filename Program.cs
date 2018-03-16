@@ -4,6 +4,8 @@ using System.IO;
 using OBSChatBot.Authentication;
 using OBSChatBot.Handler;
 using OBSChatBot.Twitch;
+using OBSWebsocketDotNet;
+using System.Linq;
 
 namespace OBSChatBot
 {
@@ -48,7 +50,7 @@ namespace OBSChatBot
                 catch (Exception e)
                 {
                     Console.WriteLine("The file could not be read: {0}", e.Message);
-                } 
+                }
             }
             #endregion
 
@@ -74,7 +76,8 @@ namespace OBSChatBot
                 string clientId = args[0];
                 string clientSecret = args[1];
 
-                authResponse = TwitchAuthentication.Authenticate(clientId, clientSecret, url => {
+                authResponse = TwitchAuthentication.Authenticate(clientId, clientSecret, url =>
+                {
                     Console.WriteLine("Log in URL:");
                     Console.WriteLine(url);
                     return Console.ReadLine();
@@ -114,13 +117,6 @@ namespace OBSChatBot
             Console.WriteLine("Connect to channel:");
             string channel = Console.ReadLine();
 
-            // Configure vote
-            Console.WriteLine("Voting action:");
-            string action = Console.ReadLine();
-
-            Console.WriteLine("Choices, seperate by '|':");
-            string[] choices = Console.ReadLine().Split('|');
-
             Console.WriteLine("Vote time in milliseconds:");
             string input = Console.ReadLine();
 
@@ -131,17 +127,22 @@ namespace OBSChatBot
                 input = Console.ReadLine();
             }
 
-            Voting votes = new Voting(action, choices);
-            VotingHandler votings = new VotingHandler();
-            votings.AddVoting(votes);
-
             Console.WriteLine("Web socket IP:");
             string uri = Console.ReadLine();
             Console.WriteLine("Web socket password: ");
             string pw = Console.ReadLine();
 
             OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
-            
+
+            VotingHandler votings = new VotingHandler();
+            // Add Scene voting
+            string action = "scene";
+            List<OBSScene> scenes = obsHandler.GetSceneList();
+            string[] choices = scenes.Select(s => s.Name).ToArray();
+
+            Voting sceneVote = new Voting(action, choices);
+            votings.AddVoting(sceneVote);
+
             CliChannelHandler channelHandler = new CliChannelHandler(votings, milliseconds, obsHandler);
             client.JoinChannel(channel, channelHandler);
 
@@ -151,9 +152,26 @@ namespace OBSChatBot
                 input = Console.ReadLine();
                 exit = input == "!exit";
 
-                if (input == "!info")
+                if (input.StartsWith("!info"))
                 {
-                    Console.WriteLine(string.Format("Action: {0}, choices: {1}", votes.ActionName, string.Join(" | ", votes.Votes)));
+                    string[] info = input.Split(' ');
+
+                    if (info.Length == 2)
+                    {
+                        Voting vote = votings.GetVotingInfo(info[1]);
+                        Console.WriteLine(string.Format("Action: {0}, choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes))); 
+                    }
+                }
+                else if (input == "!addVoting")
+                {
+                    // Configure vote
+                    Console.WriteLine("Voting action:");
+                    action = Console.ReadLine();
+
+                    Console.WriteLine("Choices, seperate by '|':");
+                    choices = Console.ReadLine().Split('|');
+                    Voting voting = new Voting(action, choices);
+                    votings.AddVoting(voting);
                 }
             }
 
