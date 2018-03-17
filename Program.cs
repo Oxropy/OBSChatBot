@@ -114,6 +114,7 @@ namespace OBSChatBot
 
         private static void TextHandling(Client client)
         {
+            #region Configure
             Console.WriteLine("Connect to channel:");
             string channel = Console.ReadLine();
 
@@ -131,6 +132,7 @@ namespace OBSChatBot
             string uri = Console.ReadLine();
             Console.WriteLine("Web socket password: ");
             string pw = Console.ReadLine();
+            #endregion
 
             OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
 
@@ -159,7 +161,7 @@ namespace OBSChatBot
                     if (info.Length == 2)
                     {
                         Voting vote = votings.GetVotingInfo(info[1]);
-                        Console.WriteLine(string.Format("Action: {0}, choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes))); 
+                        client.SendMessage(channel, string.Format("Action: {0}, choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes.Keys)));
                     }
                 }
                 else if (input == "!addVoting")

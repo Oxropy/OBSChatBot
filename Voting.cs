@@ -10,6 +10,7 @@ namespace OBSChatBot
     {
         public readonly string ActionName;
         public Dictionary<string, int> Votes { get; private set; }
+        public readonly int Milliseconds;
 
         public Voting(string action, IEnumerable<string> choices)
         {
@@ -23,11 +24,9 @@ namespace OBSChatBot
 
         public void AddVote(string vote)
         {
-            string choice = vote;
-
-            if (Votes.ContainsKey(choice))
+            if (Votes.ContainsKey(vote))
             {
-                Votes[choice]++;
+                Votes[vote]++;
             }
         }
 
