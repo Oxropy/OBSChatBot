@@ -142,7 +142,7 @@ namespace OBSChatBot
             List<OBSScene> scenes = obsHandler.GetSceneList();
             string[] choices = scenes.Select(s => s.Name).ToArray();
 
-            Voting sceneVote = new Voting(action, choices);
+            Voting sceneVote = new Voting(action, choices, milliseconds, true);
             votings.AddVoting(sceneVote);
 
             CliChannelHandler channelHandler = new CliChannelHandler(votings, milliseconds, obsHandler);
@@ -161,7 +161,7 @@ namespace OBSChatBot
                     if (info.Length == 2)
                     {
                         Voting vote = votings.GetVotingInfo(info[1]);
-                        client.SendMessage(channel, string.Format("Action: {0}, choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes.Keys)));
+                        client.SendMessage(channel, string.Format("Action: {0}, Choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes.Keys)));
                     }
                 }
                 else if (input == "!addVoting")
@@ -172,7 +172,7 @@ namespace OBSChatBot
 
                     Console.WriteLine("Choices, seperate by '|':");
                     choices = Console.ReadLine().Split('|');
-                    Voting voting = new Voting(action, choices);
+                    Voting voting = new Voting(action, choices, 30000, true);
                     votings.AddVoting(voting);
                 }
             }

@@ -11,10 +11,13 @@ namespace OBSChatBot
         public readonly string ActionName;
         public Dictionary<string, int> Votes { get; private set; }
         public readonly int Milliseconds;
+        public readonly bool AllowUserMultipleVotes;
 
-        public Voting(string action, IEnumerable<string> choices)
+        public Voting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes)
         {
             ActionName = action;
+            Milliseconds = milliseconds;
+            AllowUserMultipleVotes = allowUserMultipleVotes;
             Votes = new Dictionary<string, int>();
             foreach (var choice in choices)
             {
@@ -55,9 +58,9 @@ namespace OBSChatBot
     {
         Dictionary<string, Voting> Votings = new Dictionary<string, Voting>();
 
-        public void AddVoting(string action, IEnumerable<string> choices)
+        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes)
         {
-            Voting voting = new Voting(action, choices);
+            Voting voting = new Voting(action, choices, milliseconds, allowUserMultipleVotes);
 
             AddVoting(voting);
         }
