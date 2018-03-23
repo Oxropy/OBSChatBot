@@ -9,14 +9,12 @@ namespace OBSChatBot.Handler
 {
     public class CliChannelHandler : IChannelHandler
     {
-        public readonly int Milliseconds;
         public readonly VotingHandler Votings;
         BackgroundWorker bg = new BackgroundWorker();
         OBSWebsocketHandler ObsHandler;
         
-        public CliChannelHandler(VotingHandler votings, int milliseconds, OBSWebsocketHandler obsHandler)
+        public CliChannelHandler(VotingHandler votings, OBSWebsocketHandler obsHandler)
         {
-            Milliseconds = milliseconds;
             Votings = votings;
             ObsHandler = obsHandler;
             
@@ -48,7 +46,7 @@ namespace OBSChatBot.Handler
 
                 if (!bg.IsBusy)
                 {
-                    bg.RunWorkerAsync(new Tuple<int, string>(Milliseconds, action));
+                    bg.RunWorkerAsync(Votings.GetVotingInfo(action));
                 }
                 
                 Votings.AddVote(action, vote);
@@ -69,18 +67,19 @@ namespace OBSChatBot.Handler
         private void bg_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
         {
             Console.WriteLine("Vote ends!");
-            var result = Votings.GetResult(e.Result.ToString()).ToList();
-            Votings.ResetVoting(e.Result.ToString());
-
+            Voting voting = (Voting)e.Result;
+            var result = voting.GetResult().ToArray();
+            voting.ResetVotes();
+            
             Console.WriteLine("Winner: {0}", result[0]);
             ObsHandler.SetScene(result[0]);
         }
 
         private static void bg_DoWork(object sender, DoWorkEventArgs e)
         {
-            Tuple<int, string> info = (Tuple<int, string>)e.Argument;
-            Thread.Sleep(info.Item1);
-            e.Result = info.Item2;
+            Voting voting = (Voting)e.Argument;
+            Thread.Sleep(voting.Milliseconds);
+            e.Result = voting;
         }
     }
 }

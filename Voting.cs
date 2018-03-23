@@ -56,10 +56,22 @@ namespace OBSChatBot
 
     public class VotingHandler
     {
-        Dictionary<string, Voting> Votings = new Dictionary<string, Voting>();
+        public readonly int DefaultMilliseconds;
+        public readonly Dictionary<string, Voting> Votings;
 
-        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes)
+        public VotingHandler(int defaultMilliseconds)
         {
+            DefaultMilliseconds = defaultMilliseconds;
+            Votings = new Dictionary<string, Voting>();
+        }
+
+        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0, bool allowUserMultipleVotes = false)
+        {
+            if (milliseconds == 0)
+            {
+                milliseconds = DefaultMilliseconds;
+            }
+
             Voting voting = new Voting(action, choices, milliseconds, allowUserMultipleVotes);
 
             AddVoting(voting);

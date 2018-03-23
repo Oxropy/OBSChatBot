@@ -136,7 +136,7 @@ namespace OBSChatBot
 
             OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
 
-            VotingHandler votings = new VotingHandler();
+            VotingHandler votings = new VotingHandler(30000);
             // Add Scene voting
             string action = "scene";
             List<OBSScene> scenes = obsHandler.GetSceneList();
@@ -145,7 +145,7 @@ namespace OBSChatBot
             Voting sceneVote = new Voting(action, choices, milliseconds, true);
             votings.AddVoting(sceneVote);
 
-            CliChannelHandler channelHandler = new CliChannelHandler(votings, milliseconds, obsHandler);
+            CliChannelHandler channelHandler = new CliChannelHandler(votings, obsHandler);
             client.JoinChannel(channel, channelHandler);
 
             bool exit = false;
