@@ -136,13 +136,13 @@ namespace OBSChatBot
 
             OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
 
-            VotingHandler votings = new VotingHandler(30000);
+            VotingHandler votings = new VotingHandler(client, channel, 30000);
             // Add Scene voting
             string action = "scene";
             List<OBSScene> scenes = obsHandler.GetSceneList();
             string[] choices = scenes.Select(s => s.Name).ToArray();
 
-            Voting sceneVote = new Voting(action, choices, milliseconds, true);
+            Voting sceneVote = new Voting(client, channel, action, choices, obsHandler, milliseconds, true);
             votings.AddVoting(sceneVote);
 
             CliChannelHandler channelHandler = new CliChannelHandler(votings, obsHandler);
@@ -172,7 +172,7 @@ namespace OBSChatBot
 
                     Console.WriteLine("Choices, seperate by '|':");
                     choices = Console.ReadLine().Split('|');
-                    Voting voting = new Voting(action, choices, 30000, true);
+                    Voting voting = new Voting(client, channel, action, choices, obsHandler, 30000, true);
                     votings.AddVoting(voting);
                 }
             }

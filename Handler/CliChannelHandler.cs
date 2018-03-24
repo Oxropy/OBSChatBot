@@ -10,16 +10,12 @@ namespace OBSChatBot.Handler
     public class CliChannelHandler : IChannelHandler
     {
         public readonly VotingHandler Votings;
-        BackgroundWorker bg = new BackgroundWorker();
         OBSWebsocketHandler ObsHandler;
         
         public CliChannelHandler(VotingHandler votings, OBSWebsocketHandler obsHandler)
         {
             Votings = votings;
             ObsHandler = obsHandler;
-            
-            bg.DoWork += new DoWorkEventHandler(bg_DoWork);
-            bg.RunWorkerCompleted += new RunWorkerCompletedEventHandler(bg_RunWorkerCompleted);
         }
 
         public void OnJoin(Channel channel)
@@ -44,11 +40,6 @@ namespace OBSChatBot.Handler
                 string action = parts[1];
                 string vote = parts[2];
 
-                if (!bg.IsBusy)
-                {
-                    bg.RunWorkerAsync(Votings.GetVotingInfo(action));
-                }
-                
                 Votings.AddVote(action, vote);
             }
         }
@@ -63,23 +54,5 @@ namespace OBSChatBot.Handler
             Console.WriteLine("'{0}' leaved", name);
         }
 
-
-        private void bg_RunWorkerCompleted(object sender, RunWorkerCompletedEventArgs e)
-        {
-            Console.WriteLine("Vote ends!");
-            Voting voting = (Voting)e.Result;
-            var result = voting.GetResult().ToArray();
-            voting.ResetVotes();
-            
-            Console.WriteLine("Winner: {0}", result[0]);
-            ObsHandler.SetScene(result[0]);
-        }
-
-        private static void bg_DoWork(object sender, DoWorkEventArgs e)
-        {
-            Voting voting = (Voting)e.Argument;
-            Thread.Sleep(voting.Milliseconds);
-            e.Result = voting;
-        }
     }
 }
