@@ -14,7 +14,7 @@ namespace OBSChatBot
         public readonly Dictionary<string, int> Votes;
         public int Milliseconds;
         public readonly bool AllowUserMultipleVotes;
-        public bool IsVoting { get; private set; }
+        public bool IsActive { get; private set; }
 
         private Dictionary<string, string> Choices;
         private List<string> Voters;
@@ -38,9 +38,12 @@ namespace OBSChatBot
 
         public async Task<VoteResult> DoVoting(Client client, string channel)
         {
-            IsVoting = true;
+            int seconds = Milliseconds / 1000;
+            client.SendMessage(channel, string.Format("Voting '{0}' has started! Voting runs {1} seconds.", ActionName, seconds));
+
+            IsActive = true;
             await Task.Delay(Milliseconds);
-            IsVoting = false;
+            IsActive = false;
 
             client.SendMessage(channel, string.Format("Voting '{0}' has ended!", ActionName));
 
@@ -104,7 +107,7 @@ namespace OBSChatBot
                 string action = parts[1];
 
                 Voting voting = Votings[action];
-                if (!voting.IsVoting)
+                if (!voting.IsActive)
                 {
                     DoVoting(voting);
                 }

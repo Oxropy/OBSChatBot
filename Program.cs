@@ -6,6 +6,7 @@ using OBSChatBot.Handler;
 using OBSChatBot.Twitch;
 using OBSWebsocketDotNet;
 using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace OBSChatBot
 {
@@ -118,15 +119,7 @@ namespace OBSChatBot
             Console.WriteLine("Connect to channel:");
             string channel = Console.ReadLine();
 
-            Console.WriteLine("Default vote time in milliseconds:");
-            string input = Console.ReadLine();
-
-            int milliseconds;
-            while (!int.TryParse(input, out milliseconds) || milliseconds < 10000)
-            {
-                Console.WriteLine("Default vote time in milliseconds (>= 10000):");
-                input = Console.ReadLine();
-            }
+            int milliseconds = GetVotetime();
 
             Console.WriteLine("Web socket IP:");
             string uri = Console.ReadLine();
@@ -134,13 +127,17 @@ namespace OBSChatBot
             string pw = Console.ReadLine();
             #endregion
 
+            Console.WriteLine("Regex for OBS scenes:");
+            string scenesRegex = Console.ReadLine();
+            Regex reg = new Regex(scenesRegex);
+
             OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
 
             VotingHandler votings = new VotingHandler(client, channel, obsHandler, milliseconds);
             // Add Scene voting
             string action = "scene";
             List<OBSScene> scenes = obsHandler.GetSceneList();
-            string[] choices = scenes.Select(s => s.Name).ToArray();
+            string[] choices = scenes.Where(s => reg.IsMatch(s.Name)).Select(s => s.Name).ToArray();
 
             Voting sceneVote = new Voting(action, choices, milliseconds, true);
             votings.AddVoting(sceneVote);
@@ -148,6 +145,7 @@ namespace OBSChatBot
             CliChannelHandler channelHandler = new CliChannelHandler(votings, obsHandler);
             client.JoinChannel(channel, channelHandler);
 
+            string input;
             // Console commands
             bool exit = false;
             while (!exit)
@@ -173,13 +171,31 @@ namespace OBSChatBot
 
                     Console.WriteLine("Choices, seperate by '|':");
                     choices = Console.ReadLine().Split('|');
-                    Voting voting = new Voting(action, choices, 30000, true);
+
+                    milliseconds = GetVotetime();
+
+                    Voting voting = new Voting(action, choices, milliseconds, true);
                     votings.AddVoting(voting);
                 }
             }
 
             client.LeaveChannel(channel);
             client.Disconnect();
+        }
+
+        private static int GetVotetime()
+        {
+            Console.WriteLine("Default vote time in milliseconds:");
+            string input = Console.ReadLine();
+
+            int milliseconds;
+            while (!int.TryParse(input, out milliseconds) || milliseconds < 10000)
+            {
+                Console.WriteLine("Default vote time in milliseconds (>= 10000):");
+                input = Console.ReadLine();
+            }
+
+            return milliseconds;
         }
     }
 }
