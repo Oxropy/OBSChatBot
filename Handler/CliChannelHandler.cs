@@ -32,15 +32,10 @@ namespace OBSChatBot.Handler
         {
             Console.WriteLine("{0}: {1}", msg.DisplayName, msg.Message);
             string message = msg.Message;
-            string[] parts = message.Split(' ');
-            if (parts.Length <= 2) return;
 
-            if (parts[0] == "!vote")
+            if (message.StartsWith("!"))
             {
-                string action = parts[1];
-                string vote = parts[2];
-
-                Votings.AddVote(action, vote);
+                Votings.ProcessMessage(msg.Username, message); 
             }
         }
 

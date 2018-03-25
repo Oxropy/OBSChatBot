@@ -10,79 +10,59 @@ namespace OBSChatBot
 {
     public class Voting
     {
-        public readonly Client Client;
-        public readonly string Channel;
         public readonly string ActionName;
         public readonly Dictionary<string, int> Votes;
-        public readonly int Milliseconds;
+        public int Milliseconds;
         public readonly bool AllowUserMultipleVotes;
-        public readonly OBSWebsocketHandler ObsHandler;
         public bool IsVoting { get; private set; }
 
-        public Voting(Client client, string channel, string action, IEnumerable<string> choices, OBSWebsocketHandler obsHandler, int milliseconds, bool allowUserMultipleVotes)
+        private Dictionary<string, string> Choices;
+        private List<string> Voters;
+
+        public Voting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes)
         {
-            Client = client;
-            Channel = channel;
             ActionName = action;
-            ObsHandler = obsHandler;
             Milliseconds = milliseconds;
             AllowUserMultipleVotes = allowUserMultipleVotes;
+            Voters = new List<string>();
             Votes = new Dictionary<string, int>();
+            Choices = new Dictionary<string, string>();
+
+            choices = choices.Distinct();
             foreach (var choice in choices)
             {
                 Votes.Add(choice, 0);
+                Choices.Add(choice.ToLower(), choice);
             }
         }
 
-        public async void StartVoting()
+        public async Task<VoteResult> DoVoting(Client client, string channel)
         {
             IsVoting = true;
             await Task.Delay(Milliseconds);
             IsVoting = false;
 
-            var result = GetResult().ToArray();
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < result.Length; i++)
-            {
-                sb.Append(i + 1);
-                sb.Append(" - ");
-                sb.Append(result[i].Item1);
-                sb.Append(" (");
-                sb.Append(result[i].Item2);
-                sb.Append(")");
-                sb.Append(" | ");
-            }
-            
-            Client.SendMessage(Channel, sb.ToString());
-            ResetVotes();
+            client.SendMessage(channel, string.Format("Voting '{0}' has ended!", ActionName));
 
-            // TODO: Return result
-            if (result.Length > 0 && ActionName == "scene")
-            {
-                ObsHandler.Obs.SetCurrentScene(result[0].Item1);
-            }
+            return new VoteResult(Votes);
         }
 
-        public void AddVote(string vote)
+        public void AddVote(Vote vote)
         {
-            //TODO: case insensitive
-            if (Votes.ContainsKey(vote))
+            if (AllowUserMultipleVotes || (!AllowUserMultipleVotes && !Voters.Contains(vote.Voter)))
             {
-                Votes[vote]++;
+                string lowerVote = vote.Choice.ToLower();
+                if (Choices.ContainsKey(lowerVote))
+                {
+                    Votes[Choices[lowerVote]]++;
+                }
             }
-        }
-
-        public IEnumerable<Tuple<string, int>> GetResult()
-        {
-            // Sort by value
-            var result = (from pair in Votes orderby pair.Value descending select pair);
-
-            // return keys order by value
-            return result.Select(r => new Tuple<string, int>(r.Key, r.Value));
         }
 
         public void ResetVotes()
         {
+            Voters.Clear();
+
             // ToList for new instance
             var keys = Votes.Keys.ToList();
 
@@ -90,11 +70,6 @@ namespace OBSChatBot
             {
                 Votes[key] = 0;
             }
-        }
-
-        public void VoteExists()
-        {
-            Client.SendMessage(Channel, string.Format("Voting '{0}' exists already!", ActionName));
         }
     }
 
@@ -104,23 +79,90 @@ namespace OBSChatBot
         public readonly string Channel;
         public readonly int DefaultMilliseconds;
         public readonly Dictionary<string, Voting> Votings;
+        public readonly OBSWebsocketHandler ObsHandler;
 
-        public VotingHandler(Client client, string channel, int defaultMilliseconds)
+        public VotingHandler(Client client, string channel, OBSWebsocketHandler obsHandler, int defaultMilliseconds)
         {
             Client = client;
             Channel = channel;
+            ObsHandler = obsHandler;
             DefaultMilliseconds = defaultMilliseconds;
             Votings = new Dictionary<string, Voting>();
         }
 
-        public void AddVoting(string action, IEnumerable<string> choices, OBSWebsocketHandler obsHandler, int milliseconds = 0, bool allowUserMultipleVotes = false)
+        public void ProcessMessage(string user, string message)
+        {
+            string[] parts = message.Split(' ');
+
+            if (parts[0] == "!info" && parts.Length == 2) // Info for voting
+            {
+                Voting vote = GetVotingInfo(parts[1]);
+                Client.SendMessage(Channel, string.Format("Action: {0}, Choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes.Keys)));
+            }
+            else if (parts[0] == "!vote" && parts.Length == 3) // Vote for existing voting
+            {
+                string action = parts[1];
+
+                Voting voting = Votings[action];
+                if (!voting.IsVoting)
+                {
+                    DoVoting(voting);
+                }
+
+                Vote vote = new Vote(user, parts[2]);
+                AddVote(voting, vote);
+            }
+            else if (parts[0] == "!addVoting" && parts.Length == 5) // Create new voting
+            {
+                string action = parts[1];
+                var choices = parts[2].Split('|');
+                if (!int.TryParse(parts[3], out int milliseconds)) return;
+                bool multiVotes = parts[4] == "0";
+
+                Voting voting = new Voting(action, choices, milliseconds, multiVotes);
+                AddVoting(voting);
+            }
+        }
+
+        public async void DoVoting(Voting voting)
+        {
+            var t = await voting.DoVoting(Client, Channel);
+
+            var result = t.GetResult();
+
+            StringBuilder sb = new StringBuilder();
+            int votePosition = 1;
+            foreach (var choice in result)
+            {
+                sb.Append(votePosition);
+                sb.Append(" - ");
+                sb.Append(choice.Choice);
+                sb.Append(" (");
+                sb.Append(choice.Votes);
+                sb.Append(")");
+                sb.Append(" | ");
+
+                votePosition++;
+            }
+
+            Client.SendMessage(Channel, sb.ToString());
+            voting.ResetVotes();
+
+            if (votePosition > 1 && voting.ActionName == "scene")
+            {
+                var winner = result.ToArray()[0];
+                ObsHandler.Obs.SetCurrentScene(winner.Choice);
+            }
+        }
+
+        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0, bool allowUserMultipleVotes = false)
         {
             if (milliseconds == 0)
             {
                 milliseconds = DefaultMilliseconds;
             }
 
-            Voting voting = new Voting(Client, Channel, action, choices, obsHandler, milliseconds, allowUserMultipleVotes);
+            Voting voting = new Voting(action, choices, milliseconds, allowUserMultipleVotes);
 
             AddVoting(voting);
         }
@@ -129,46 +171,79 @@ namespace OBSChatBot
         {
             if (Votings.ContainsKey(voting.ActionName))
             {
-                voting.VoteExists();
-                return;
+                Client.SendMessage(Channel, string.Format("Voting '{0}' exists already!", voting.ActionName));
             }
 
             Votings.Add(voting.ActionName, voting);
         }
 
-        public void AddVote(string action, string vote)
+        public void RemoveVoting(string action)
         {
             if (Votings.ContainsKey(action))
             {
-                Voting voting = Votings[action];
-
-                if (!voting.IsVoting)
-                {
-                    new Thread(voting.StartVoting).Start();
-                }
-
-                Votings[action].AddVote(vote); 
+                Votings.Remove(action);
             }
         }
 
-        public IEnumerable<Tuple<string, int>> GetResult(string action)
+        public void AddVote(Voting voting, Vote vote)
         {
-            return Votings[action].GetResult();
-        }
-
-        public void ResetVoting(string action)
-        {
-            Votings[action].ResetVotes();
+            if (Votings.ContainsKey(voting.ActionName))
+            {
+                voting.AddVote(vote);
+            }
         }
 
         public Voting GetVotingInfo(string voting)
         {
             if (Votings.ContainsKey(voting))
             {
-                return Votings[voting]; 
+                return Votings[voting];
             }
 
-            return new Voting(null, "", "", new string[0], null, 0, false);
+            return new Voting("", new string[0], 0, false);
+        }
+    }
+
+    public class VoteResult
+    {
+        public readonly Dictionary<string, int> Votes;
+
+        public VoteResult(Dictionary<string, int> votes)
+        {
+            Votes = votes;
+        }
+
+        public IEnumerable<VoteResultValue> GetResult()
+        {
+            // Sort by value
+            var result = (from pair in Votes orderby pair.Value descending select pair);
+
+            // return keys order by value
+            return result.Select(r => new VoteResultValue(r.Key, r.Value));
+        }
+    }
+
+    public class VoteResultValue
+    {
+        public readonly string Choice;
+        public readonly int Votes;
+
+        public VoteResultValue(string choice, int votes)
+        {
+            Choice = choice;
+            Votes = votes;
+        }
+    }
+
+    public class Vote
+    {
+        public readonly string Voter;
+        public readonly string Choice;
+
+        public Vote(string voter, string choice)
+        {
+            Voter = voter;
+            Choice = choice;
         }
     }
 }

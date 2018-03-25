@@ -118,13 +118,13 @@ namespace OBSChatBot
             Console.WriteLine("Connect to channel:");
             string channel = Console.ReadLine();
 
-            Console.WriteLine("Vote time in milliseconds:");
+            Console.WriteLine("Default vote time in milliseconds:");
             string input = Console.ReadLine();
 
             int milliseconds;
             while (!int.TryParse(input, out milliseconds) || milliseconds < 10000)
             {
-                Console.WriteLine("Vote time in milliseconds (>= 10000):");
+                Console.WriteLine("Default vote time in milliseconds (>= 10000):");
                 input = Console.ReadLine();
             }
 
@@ -136,18 +136,19 @@ namespace OBSChatBot
 
             OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
 
-            VotingHandler votings = new VotingHandler(client, channel, 30000);
+            VotingHandler votings = new VotingHandler(client, channel, obsHandler, milliseconds);
             // Add Scene voting
             string action = "scene";
             List<OBSScene> scenes = obsHandler.GetSceneList();
             string[] choices = scenes.Select(s => s.Name).ToArray();
 
-            Voting sceneVote = new Voting(client, channel, action, choices, obsHandler, milliseconds, true);
+            Voting sceneVote = new Voting(action, choices, milliseconds, true);
             votings.AddVoting(sceneVote);
 
             CliChannelHandler channelHandler = new CliChannelHandler(votings, obsHandler);
             client.JoinChannel(channel, channelHandler);
 
+            // Console commands
             bool exit = false;
             while (!exit)
             {
@@ -172,7 +173,7 @@ namespace OBSChatBot
 
                     Console.WriteLine("Choices, seperate by '|':");
                     choices = Console.ReadLine().Split('|');
-                    Voting voting = new Voting(client, channel, action, choices, obsHandler, 30000, true);
+                    Voting voting = new Voting(action, choices, 30000, true);
                     votings.AddVoting(voting);
                 }
             }
