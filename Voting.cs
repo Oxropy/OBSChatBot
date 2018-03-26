@@ -74,6 +74,11 @@ namespace OBSChatBot
                 Votes[key] = 0;
             }
         }
+
+        public void SetNewVotetime(int milliseconds)
+        {
+            Milliseconds = milliseconds;
+        }
     }
 
     public class VotingHandler
@@ -149,13 +154,14 @@ namespace OBSChatBot
             }
 
             Client.SendMessage(Channel, sb.ToString());
-            voting.ResetVotes();
 
             if (votePosition > 1 && voting.ActionName == "scene")
             {
                 var winner = result.ToArray()[0];
                 ObsHandler.Obs.SetCurrentScene(winner.Choice);
             }
+            
+            voting.ResetVotes();
         }
 
         public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0, bool allowUserMultipleVotes = false)
@@ -204,6 +210,14 @@ namespace OBSChatBot
             }
 
             return new Voting("", new string[0], 0, false);
+        }
+
+        public void SetNewVotetime(string voting, int milliseconds)
+        {
+            if (Votings.ContainsKey(voting))
+            {
+                Votings[voting].SetNewVotetime(milliseconds);
+            }
         }
     }
 
