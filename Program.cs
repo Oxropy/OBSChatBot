@@ -139,7 +139,8 @@ namespace OBSChatBot
             List<OBSScene> scenes = obsHandler.GetSceneList();
             string[] choices = scenes.Where(s => reg.IsMatch(s.Name)).Select(s => s.Name).ToArray();
 
-            Voting sceneVote = new Voting(action, choices, milliseconds, true);
+            var afterVote = new Action<OBSWebsocketHandler, IEnumerable<VoteResultValue>>(ChangeObsScene);
+            Voting sceneVote = new Voting(action, choices, milliseconds, true, afterVote);
             votings.AddVoting(sceneVote);
 
             CliChannelHandler channelHandler = new CliChannelHandler(votings, obsHandler);
@@ -196,6 +197,13 @@ namespace OBSChatBot
             }
 
             return milliseconds;
+        }
+
+        private static void ChangeObsScene(OBSWebsocketHandler obsHandler, IEnumerable<VoteResultValue> result)
+        {
+            var winner = result.ToArray()[0];
+            obsHandler.Obs.SetCurrentScene(winner.Choice);
+
         }
     }
 }

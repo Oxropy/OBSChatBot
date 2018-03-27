@@ -11,43 +11,32 @@ namespace OBSChatBot
     public class Voting
     {
         public readonly string ActionName;
-        public readonly Dictionary<string, int> Votes;
+        public Dictionary<string, int> Votes;
         public int Milliseconds;
         public readonly bool AllowUserMultipleVotes;
         public bool IsActive { get; private set; }
-
-        private Dictionary<string, string> Choices;
+        public readonly Action<OBSWebsocketHandler, IEnumerable<VoteResultValue>> AfterVote;
+        /// Key: lowercase, Value: scene
+        public Dictionary<string, string> Choices;
         private List<string> Voters;
 
-        public Voting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes)
+        public Voting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes, Action<OBSWebsocketHandler, IEnumerable<VoteResultValue>> afterVote = null)
         {
             ActionName = action;
             Milliseconds = milliseconds;
             AllowUserMultipleVotes = allowUserMultipleVotes;
+            AfterVote = afterVote;
             Voters = new List<string>();
-            Votes = new Dictionary<string, int>();
+           
             Choices = new Dictionary<string, string>();
 
             choices = choices.Distinct();
             foreach (var choice in choices)
             {
-                Votes.Add(choice, 0);
                 Choices.Add(choice.ToLower(), choice);
             }
-        }
 
-        public async Task<VoteResult> DoVoting(Client client, string channel)
-        {
-            int seconds = Milliseconds / 1000;
-            client.SendMessage(channel, string.Format("Voting '{0}' has started! Voting runs {1} seconds.", ActionName, seconds));
-
-            IsActive = true;
-            await Task.Delay(Milliseconds);
-            IsActive = false;
-
-            client.SendMessage(channel, string.Format("Voting '{0}' has ended!", ActionName));
-
-            return new VoteResult(Votes);
+            ResetVotes();
         }
 
         public void AddVote(Vote vote)
@@ -57,22 +46,28 @@ namespace OBSChatBot
                 string lowerVote = vote.Choice.ToLower();
                 if (Choices.ContainsKey(lowerVote))
                 {
-                    Votes[Choices[lowerVote]]++;
+                    Votes[lowerVote]++;
                 }
             }
         }
 
         public void ResetVotes()
         {
-            Voters.Clear();
-
-            // ToList for new instance
-            var keys = Votes.Keys.ToList();
-
-            foreach (var key in keys)
+            Votes = new Dictionary<string, int>();
+            foreach (var choice in Choices)
             {
-                Votes[key] = 0;
+                Votes.Add(choice.Key, 0);
             }
+        }
+
+        public void SetActive()
+        {
+            IsActive = true;
+        }
+
+        public void SetInActive()
+        {
+            IsActive = false;
         }
 
         public void SetNewVotetime(int milliseconds)
@@ -105,7 +100,7 @@ namespace OBSChatBot
             if (parts[0] == "!info" && parts.Length == 2) // Info for voting
             {
                 Voting vote = GetVotingInfo(parts[1]);
-                Client.SendMessage(Channel, string.Format("Action: {0}, Choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes.Keys)));
+                Client.SendMessage(Channel, string.Format("Action: {0}, Choices: {1}", vote.ActionName, string.Join(" | ", vote.Choices.Values)));
             }
             else if (parts[0] == "!vote" && parts.Length == 3) // Vote for existing voting
             {
@@ -134,9 +129,17 @@ namespace OBSChatBot
 
         public async void DoVoting(Voting voting)
         {
-            var t = await voting.DoVoting(Client, Channel);
+            int seconds = voting.Milliseconds / 1000;
+            Client.SendMessage(Channel, string.Format("Voting '{0}' has started! Voting runs {1} seconds.", voting.ActionName, seconds));
 
-            var result = t.GetResult();
+            voting.SetActive();
+            await Task.Delay(voting.Milliseconds);
+            var voteResult = new VoteResult(voting.Votes, voting.Choices);
+            voting.SetInActive();
+
+            Client.SendMessage(Channel, string.Format("Voting '{0}' has ended!", voting.ActionName));
+            
+            var result = voteResult.GetResult();
 
             StringBuilder sb = new StringBuilder();
             int votePosition = 1;
@@ -155,12 +158,8 @@ namespace OBSChatBot
 
             Client.SendMessage(Channel, sb.ToString());
 
-            if (votePosition > 1 && voting.ActionName == "scene")
-            {
-                var winner = result.ToArray()[0];
-                ObsHandler.Obs.SetCurrentScene(winner.Choice);
-            }
-            
+            voting.AfterVote?.Invoke(ObsHandler, result);
+
             voting.ResetVotes();
         }
 
@@ -224,10 +223,12 @@ namespace OBSChatBot
     public class VoteResult
     {
         public readonly Dictionary<string, int> Votes;
+        public readonly Dictionary<string, string> Choices;
 
-        public VoteResult(Dictionary<string, int> votes)
+        public VoteResult(Dictionary<string, int> votes, Dictionary<string, string> choices)
         {
             Votes = votes;
+            Choices = choices;
         }
 
         public IEnumerable<VoteResultValue> GetResult()
@@ -236,7 +237,7 @@ namespace OBSChatBot
             var result = (from pair in Votes orderby pair.Value descending select pair);
 
             // return keys order by value
-            return result.Select(r => new VoteResultValue(r.Key, r.Value));
+            return result.Select(r => new VoteResultValue(Choices[r.Key], r.Value));
         }
     }
 
