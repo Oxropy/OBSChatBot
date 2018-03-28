@@ -14,7 +14,7 @@ namespace OBSChatBot
         public OBSWebsocketHandler(string uri, string password)
         {
             Obs = new OBSWebsocket();
-
+            
             Obs.Connected += onConnect;
             Obs.Disconnected += onDisconnect;
 
@@ -35,6 +35,11 @@ namespace OBSChatBot
         public void SetScene(string scene)
         {
             Obs.SetCurrentScene(scene);
+        }
+
+        public string GetCurrentSceneName()
+        {
+            return Obs.GetCurrentScene().Name;
         }
 
         public List<OBSScene> GetSceneList()

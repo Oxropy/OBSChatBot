@@ -121,8 +121,12 @@ namespace OBSChatBot
 
             int milliseconds = GetVotetime();
 
-            Console.WriteLine("Web socket IP:");
+            Console.WriteLine("Web socket IP, Default 'ws://localhost:4444':");
             string uri = Console.ReadLine();
+            if (string.IsNullOrWhiteSpace(uri))
+            {
+                uri = "ws://localhost:4444";
+            }
             Console.WriteLine("Web socket password: ");
             string pw = Console.ReadLine();
             #endregion
@@ -203,7 +207,6 @@ namespace OBSChatBot
         {
             var winner = result.ToArray()[0];
             obsHandler.Obs.SetCurrentScene(winner.Choice);
-
         }
     }
 }
