@@ -35,7 +35,7 @@ namespace OBSChatBot.Handler
 
             if (message.StartsWith("!"))
             {
-                Votings.ProcessMessage(msg.Username, message); 
+                Votings.ProcessMessage(msg.Username, message, msg.IsModerator); 
             }
         }
 
