@@ -1,4 +1,5 @@
 ﻿using OBSChatBot.Twitch;
+using OBSWebsocketDotNet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,12 +16,12 @@ namespace OBSChatBot
         public int Milliseconds;
         public readonly bool AllowUserMultipleVotes;
         public bool IsActive { get; private set; }
-        public readonly Action<OBSWebsocketHandler, IEnumerable<VoteResultValue>> AfterVote;
+        public readonly Action<OBSWebsocket, IEnumerable<VoteResultValue>> AfterVote;
         /// Key: lowercase, Value: scene
         public Dictionary<string, string> Choices;
         private List<string> Voters;
 
-        public Voting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes, Action<OBSWebsocketHandler, IEnumerable<VoteResultValue>> afterVote = null)
+        public Voting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes, Action<OBSWebsocket, IEnumerable<VoteResultValue>> afterVote = null)
         {
             ActionName = action;
             Milliseconds = milliseconds;
@@ -82,13 +83,15 @@ namespace OBSChatBot
         public readonly string Channel;
         public readonly int DefaultMilliseconds;
         public readonly Dictionary<string, Voting> Votings;
-        public readonly OBSWebsocketHandler ObsHandler;
+        public readonly OBSWebsocket Obs;
 
-        public VotingHandler(Client client, string channel, OBSWebsocketHandler obsHandler, int defaultMilliseconds)
+        private static Voting emptyVoting = new Voting("", new string[0], 0, false);
+
+        public VotingHandler(Client client, string channel, OBSWebsocket obs, int defaultMilliseconds)
         {
             Client = client;
             Channel = channel;
-            ObsHandler = obsHandler;
+            Obs = obs;
             DefaultMilliseconds = defaultMilliseconds;
             Votings = new Dictionary<string, Voting>();
         }
@@ -189,17 +192,14 @@ namespace OBSChatBot
 
             Client.SendMessage(Channel, sb.ToString());
 
-            voting.AfterVote?.Invoke(ObsHandler, result);
+            voting.AfterVote?.Invoke(Obs, result);
 
             voting.ResetVotes();
         }
 
         public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0, bool allowUserMultipleVotes = false)
         {
-            if (milliseconds == 0)
-            {
-                milliseconds = DefaultMilliseconds;
-            }
+            if (milliseconds == 0) milliseconds = DefaultMilliseconds;
 
             Voting voting = new Voting(action, choices, milliseconds, allowUserMultipleVotes);
 
@@ -234,12 +234,10 @@ namespace OBSChatBot
 
         public Voting GetVotingInfo(string voting)
         {
-            if (Votings.ContainsKey(voting))
-            {
-                return Votings[voting];
-            }
+            // Voting does not exist, return empty voting
+            if (!Votings.ContainsKey(voting)) return emptyVoting;
 
-            return new Voting("", new string[0], 0, false);
+            return Votings[voting];
         }
 
         public void SetNewVotetime(string voting, int milliseconds)

@@ -4,18 +4,19 @@ using System.Threading;
 using OBSChatBot.Twitch;
 using System.Linq;
 using TwitchLib.Client.Models;
+using OBSWebsocketDotNet;
 
 namespace OBSChatBot.Handler
 {
     public class CliChannelHandler : IChannelHandler
     {
         public readonly VotingHandler Votings;
-        OBSWebsocketHandler ObsHandler;
+        OBSWebsocket Obs;
         
-        public CliChannelHandler(VotingHandler votings, OBSWebsocketHandler obsHandler)
+        public CliChannelHandler(VotingHandler votings, OBSWebsocket obs)
         {
             Votings = votings;
-            ObsHandler = obsHandler;
+            Obs = obs;
         }
 
         public void OnJoin(Channel channel)

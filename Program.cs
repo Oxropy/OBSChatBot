@@ -135,19 +135,20 @@ namespace OBSChatBot
             string scenesRegex = Console.ReadLine();
             Regex reg = new Regex(scenesRegex);
 
-            OBSWebsocketHandler obsHandler = new OBSWebsocketHandler(uri, pw);
+            var obs = new OBSWebsocket();
+            obs.Connect(uri, pw);
 
-            VotingHandler votings = new VotingHandler(client, channel, obsHandler, milliseconds);
+            VotingHandler votings = new VotingHandler(client, channel, obs, milliseconds);
             // Add Scene voting
             string action = "scene";
-            List<OBSScene> scenes = obsHandler.GetSceneList();
+            List<OBSScene> scenes = obs.ListScenes();
             string[] choices = scenes.Where(s => reg.IsMatch(s.Name)).Select(s => s.Name).ToArray();
 
-            var afterVote = new Action<OBSWebsocketHandler, IEnumerable<VoteResultValue>>(ChangeObsScene);
+            var afterVote = new Action<OBSWebsocket, IEnumerable<VoteResultValue>>(ChangeObsScene);
             Voting sceneVote = new Voting(action, choices, milliseconds, true, afterVote);
             votings.AddVoting(sceneVote);
 
-            CliChannelHandler channelHandler = new CliChannelHandler(votings, obsHandler);
+            CliChannelHandler channelHandler = new CliChannelHandler(votings, obs);
             client.JoinChannel(channel, channelHandler);
 
             string input;
@@ -203,10 +204,10 @@ namespace OBSChatBot
             return milliseconds;
         }
 
-        private static void ChangeObsScene(OBSWebsocketHandler obsHandler, IEnumerable<VoteResultValue> result)
+        private static void ChangeObsScene(OBSWebsocket obs, IEnumerable<VoteResultValue> result)
         {
             var winner = result.ToArray()[0];
-            obsHandler.Obs.SetCurrentScene(winner.Choice);
+            obs.SetCurrentScene(winner.Choice);
         }
     }
 }
