@@ -142,7 +142,6 @@
     <Compile Include="Authentication\TwitchAuthentication.cs" />
     <Compile Include="Handler\CliChannelHandler.cs" />
     <Compile Include="Handler\CliClientHandler.cs" />
-    <Compile Include="OBSWebsocketHandler.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Resources\TwitchResource.Designer.cs" />
