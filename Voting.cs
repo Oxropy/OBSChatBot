@@ -102,17 +102,28 @@ namespace OBSChatBot
 
             switch (parts[0])
             {
-                case "!info": // Info for voting
-                    ChatCommands.Info(this, parts);
+                case "!votingInfo": // Info for voting
+                    if (parts.Length != 2) return;
+                    ChatCommands.Info(this, parts[1]);
                     break;
                 case "!vote": // Vote for existing voting
-                    ChatCommands.Vote(this, user, parts);
+                    if (parts.Length != 3) return;
+                    ChatCommands.Vote(this, user, parts[1], parts[2]);
                     break;
                 case "!addVoting": // Create new voting
-                    ChatCommands.AddVoting(this, isMod, parts);
+                    if (parts.Length != 4 || !isMod || !int.TryParse(parts[3], out int milliseconds)) return;
+                    ChatCommands.AddVoting(this, parts[1], parts[2].Split('|'), milliseconds);
                     break;
-                case "!editVoteTime":
-                    ChatCommands.EditVotetime(this, isMod, parts);
+                case "!editVoteTime": // Change time for voting
+                    if (parts.Length != 2 || !isMod || !int.TryParse(parts[3], out milliseconds)) return;
+                    ChatCommands.EditVotetime(this, parts[1], milliseconds);
+                    break;
+                case "!deleteVoting": // Remove voting
+                    if (parts.Length != 2 || !isMod) return;
+                    ChatCommands.DeleteVoting(this, parts[1]);
+                    break;
+                case "!votings":
+                    ChatCommands.Votings(this);
                     break;
             }
         }
@@ -147,9 +158,7 @@ namespace OBSChatBot
             }
 
             Client.SendMessage(Channel, sb.ToString());
-
             voting.AfterVote?.Invoke(Obs, result);
-
             voting.ResetVotes();
         }
 
@@ -158,7 +167,6 @@ namespace OBSChatBot
             if (milliseconds == 0) milliseconds = DefaultMilliseconds;
 
             Voting voting = new Voting(action, choices, milliseconds, allowUserMultipleVotes);
-
             AddVoting(voting);
         }
 
@@ -167,6 +175,7 @@ namespace OBSChatBot
             if (Votings.ContainsKey(voting.ActionName))
             {
                 Client.SendMessage(Channel, string.Format("Voting '{0}' exists already!", voting.ActionName));
+                return;
             }
 
             Votings.Add(voting.ActionName, voting);
@@ -174,10 +183,7 @@ namespace OBSChatBot
 
         public void RemoveVoting(string action)
         {
-            if (Votings.ContainsKey(action))
-            {
-                Votings.Remove(action);
-            }
+            Votings.Remove(action);
         }
 
         public void AddVote(Voting voting, Vote vote)
@@ -252,67 +258,48 @@ namespace OBSChatBot
 
     public static class ChatCommands
     {
-        public static void Info(VotingHandler votingHandler, string[] parts)
+        public static void Info(VotingHandler votingHandler, string action)
         {
-            if (parts.Length == 2)
+            Voting vote = votingHandler.GetVotingInfo(action);
+            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Action: {0}, Choices: {1}", vote.ActionName, string.Join(" | ", vote.Choices.Values)));
+        }
+
+        public static void Vote(VotingHandler votingHandler, string user, string action, string choice)
+        {
+            if (votingHandler.Votings.ContainsKey(action))
             {
-                Voting vote = votingHandler.GetVotingInfo(parts[1]);
-                votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Action: {0}, Choices: {1}", vote.ActionName, string.Join(" | ", vote.Choices.Values)));
+                Voting voting = votingHandler.Votings[action];
+                if (!voting.IsActive) votingHandler.DoVoting(voting);
+
+                Vote vote = new Vote(user, choice);
+                votingHandler.AddVote(voting, vote);
             }
         }
 
-        public static void Vote(VotingHandler votingHandler, string user, string[] parts)
+        public static void AddVoting(VotingHandler votingHandler, string action, string[] choices, int milliseconds, bool isMultiVote = true)
         {
-            if (parts.Length == 3)
+            Voting voting = new Voting(action, choices, milliseconds, isMultiVote);
+            votingHandler.AddVoting(voting);
+        }
+
+        public static void EditVotetime(VotingHandler votingHandler, string action, int milliseconds)
+        {
+            if (votingHandler.Votings.ContainsKey(action) && milliseconds >= 10000)
             {
-                string action = parts[1];
-
-                if (votingHandler.Votings.ContainsKey(action))
-                {
-                    Voting voting = votingHandler.Votings[action];
-                    if (!voting.IsActive)
-                    {
-                        votingHandler.DoVoting(voting);
-                    }
-
-                    Vote vote = new Vote(user, parts[2]);
-                    votingHandler.AddVote(voting, vote);
-                }
+                Voting voting = votingHandler.Votings[action];
+                voting.SetNewVotetime(milliseconds);
+                votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Votetime for action '{0}' set to {1} sec", action, milliseconds / 1000));
             }
         }
 
-        public static void AddVoting(VotingHandler votingHandler, bool isMod, string[] parts)
+        public static void DeleteVoting(VotingHandler votingHandler, string action)
         {
-            if (isMod && parts.Length == 4)
-            {
-                string action = parts[1];
-                var choices = parts[2].Split('|');
-                if (!int.TryParse(parts[3], out int milliseconds)) return;
-                bool multiVotes = false;
-
-                Voting voting = new Voting(action, choices, milliseconds, multiVotes);
-                votingHandler.AddVoting(voting);
-            }
+            votingHandler.RemoveVoting(action);
         }
 
-        public static void EditVotetime(VotingHandler votingHandler, bool isMod, string[] parts)
+        public static void Votings(VotingHandler votingHandler)
         {
-            if (isMod && parts.Length == 3)
-            {
-                string action = parts[1];
-                if (votingHandler.Votings.ContainsKey(action))
-                {
-                    if (int.TryParse(parts[2], out int milliseconds))
-                    {
-                        if (milliseconds >= 10000)
-                        {
-                            Voting voting = votingHandler.Votings[action];
-                            voting.SetNewVotetime(milliseconds);
-                            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Votetime for action '{0}' set to {1} sec", action, milliseconds / 1000));
-                        }
-                    }
-                }
-            }
+            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Existing votings: {0}", string.Join(" | ", votingHandler.Votings.Keys.ToArray())));
         }
     }
 }
