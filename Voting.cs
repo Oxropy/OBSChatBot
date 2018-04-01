@@ -141,23 +141,8 @@ namespace OBSChatBot
             Client.SendMessage(Channel, string.Format("Voting '{0}' has ended!", voting.ActionName));
 
             var result = voteResult.GetResult();
-
-            StringBuilder sb = new StringBuilder();
-            int votePosition = 1;
-            foreach (var choice in result)
-            {
-                sb.Append(votePosition);
-                sb.Append(" - ");
-                sb.Append(choice.Choice);
-                sb.Append(" (");
-                sb.Append(choice.Votes);
-                sb.Append(")");
-                sb.Append(" | ");
-
-                votePosition++;
-            }
-
-            Client.SendMessage(Channel, sb.ToString());
+            ShowVotingResult(result);
+            
             voting.AfterVote?.Invoke(Obs, result);
             voting.ResetVotes();
         }
@@ -208,6 +193,38 @@ namespace OBSChatBot
             {
                 Votings[voting].SetNewVotetime(milliseconds);
             }
+        }
+
+        public void ShowVotingResult(IEnumerable<VoteResultValue> result)
+        {
+            StringBuilder sb = new StringBuilder();
+            int votePosition = 1;
+
+            var e = result.GetEnumerator();
+            if (e.MoveNext())
+            {
+                var v = e.Current;
+                GetChoiceResult(sb, v, votePosition);
+
+                while (e.MoveNext())
+                {
+                    v = e.Current;
+                    sb.Append(" | ");
+                    GetChoiceResult(sb, v, votePosition);
+                }
+            }
+            
+            Client.SendMessage(Channel, sb.ToString());
+        }
+
+        private void GetChoiceResult(StringBuilder sb, VoteResultValue resultValue, int position)
+        {
+            sb.Append(position);
+            sb.Append(" - ");
+            sb.Append(resultValue.Choice);
+            sb.Append(" (");
+            sb.Append(resultValue.Votes);
+            sb.Append(")");
         }
     }
 
