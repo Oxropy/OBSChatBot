@@ -1,8 +1,5 @@
 ﻿using System;
-using System.ComponentModel;
-using System.Threading;
 using OBSChatBot.Twitch;
-using System.Linq;
 using TwitchLib.Client.Models;
 using OBSWebsocketDotNet;
 
