@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace OBSChatBot
@@ -204,20 +203,21 @@ namespace OBSChatBot
             if (e.MoveNext())
             {
                 var v = e.Current;
-                GetChoiceResult(sb, v, votePosition);
+                AppendResultString(sb, v, votePosition);
 
                 while (e.MoveNext())
                 {
+                    votePosition++;
                     v = e.Current;
                     sb.Append(" | ");
-                    GetChoiceResult(sb, v, votePosition);
+                    AppendResultString(sb, v, votePosition);
                 }
             }
             
             Client.SendMessage(Channel, sb.ToString());
         }
 
-        private void GetChoiceResult(StringBuilder sb, VoteResultValue resultValue, int position)
+        private void AppendResultString(StringBuilder sb, VoteResultValue resultValue, int position)
         {
             sb.Append(position);
             sb.Append(" - ");
