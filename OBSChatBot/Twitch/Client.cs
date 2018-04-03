@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using TwitchLib.Client.Models;
+﻿using TwitchLib.Client.Models;
 using TwitchLib.Client.Events;
 using TwitchLib.Client;
 
@@ -7,103 +6,74 @@ namespace OBSChatBot.Twitch
 {
     public class Client
     {
-        public string User { get; private set; }
-        private IClientHandler handler;
-        private TwitchClient client;
-        private Dictionary<string, Channel> channelDict = new Dictionary<string, Channel>();
+        public string User;
+        private IClientHandler ClientHandler;
+        private TwitchClient TClient;
+        private Channel Channel;
 
         #region Konstruktor
         public Client(string user, string accesToken, IClientHandler handler)
         {
-            this.User = user;
-            this.handler = handler;
+            User = user;
+            ClientHandler = handler;
             var credentials = new ConnectionCredentials(user, accesToken);
-            client = new TwitchClient();
-            client.Initialize(credentials);
+            TClient = new TwitchClient();
+            TClient.Initialize(credentials);
 
-            client.OnJoinedChannel += Client_OnJoinedChannel;
-            client.OnMessageReceived += Client_OnMessageReceived;
-            client.OnUserJoined += Client_OnUserJoined;
-            client.OnUserLeft += Client_OnUserLeft;
-            client.OnConnected += Client_OnConnected;
-            client.OnDisconnected += Client_OnDisconnected;
+            TClient.OnJoinedChannel += Client_OnJoinedChannel;
+            TClient.OnMessageReceived += Client_OnMessageReceived;
+            TClient.OnConnected += Client_OnConnected;
         }
         #endregion
 
         #region Methoden
         public void Connect()
         {
-            client.Connect();
+            TClient.Connect();
         }
 
         public void Disconnect()
         {
-            client.Disconnect();
+            TClient.Disconnect();
         }
 
         public Channel JoinChannel(string name, IChannelHandler handler)
         {
-            if (channelDict.ContainsKey(name))
+            if (Channel == null)
             {
-                return channelDict[name];
+                TClient.JoinChannel(name);
+                Channel = new Channel(this, name, handler);
             }
 
-            client.JoinChannel(name);
-            var channel = new Channel(this, name, handler);
-            channelDict.Add(name, channel);
-            return channel;
-        }
-
-        public void Join(string name, IChannelHandler handler)
-        {
-            //...
+            return Channel;
         }
 
         public void LeaveChannel(string channel)
         {
-            client.LeaveChannel(channel);
+            TClient.LeaveChannel(channel);
         }
 
         public void SendMessage(string channel, string message)
         {
-            client.SendMessage(channel, message);
+            TClient.SendMessage(channel, message);
         }
         #endregion
 
         #region Events
         private void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
         {
-            Channel channel = channelDict[e.Channel];
-            channel.Handler.OnJoin(channel);
+            Channel.Handler.OnJoin(Channel);
         }
-
-        private void Client_OnUserLeft(object sender, OnUserLeftArgs e)
-        {
-            Channel channel = channelDict[e.Channel];
-            channel.Handler.OnUserLeave(channel, e.Username);
-        }
-
-        private void Client_OnUserJoined(object sender, OnUserJoinedArgs e)
-        {
-            Channel channel = channelDict[e.Channel];
-            channel.Handler.OnUserJoin(channel, e.Username);
-        }
-
+        
         private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
         {
             ChatMessage message = e.ChatMessage;
-            Channel channel = channelDict[message.Channel];
-            channel.Handler.OnMessage(channel, message);
+            Channel.Handler.OnMessage(Channel, message);
         }
 
         private void Client_OnConnected(object sender, OnConnectedArgs e)
         {
-            handler.OnConnect(this);
-        }
-
-        private void Client_OnDisconnected(object sender, OnDisconnectedArgs e)
-        {
-            handler.OnDisconnect(this);
+            ClientHandler.OnConnect(this);
         }
         #endregion
     }

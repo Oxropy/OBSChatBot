@@ -1,8 +1,5 @@
 ﻿using System;
-using System.ComponentModel;
-using System.Threading;
 using OBSChatBot.Twitch;
-using System.Linq;
 using TwitchLib.Client.Models;
 using OBSWebsocketDotNet;
 
@@ -24,11 +21,6 @@ namespace OBSChatBot.Handler
             Console.WriteLine("Joined '{0}'", channel.Name);
         }
 
-        public void OnLeave(Channel channel)
-        {
-            Console.WriteLine("Leaved '{0}'", channel.Name);
-        }
-
         public void OnMessage(Channel channel, ChatMessage msg)
         {
             Console.WriteLine("{0}: {1}", msg.DisplayName, msg.Message);
@@ -39,16 +31,5 @@ namespace OBSChatBot.Handler
                 Votings.ProcessMessage(msg.Username, message, msg.IsModerator); 
             }
         }
-
-        public void OnUserJoin(Channel channel, string name)
-        {
-            Console.WriteLine("'{0}' joined", name);
-        }
-
-        public void OnUserLeave(Channel channel, string name)
-        {
-            Console.WriteLine("'{0}' leaved", name);
-        }
-
     }
 }

@@ -8,14 +8,9 @@
 
         public Channel(Client client, string channel, IChannelHandler handler)
         {
-            this.Client = client;
-            this.Name = channel;
-            this.Handler = handler;
-        }
-
-        public void LeaveChannel()
-        {
-            Client.LeaveChannel(Name);
+            Client = client;
+            Name = channel;
+            Handler = handler;
         }
 
         public void SendMessage(string message)
