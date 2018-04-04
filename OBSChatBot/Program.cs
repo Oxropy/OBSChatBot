@@ -2,11 +2,12 @@
 using System.Collections.Generic;
 using System.IO;
 using OBSChatBot.Authentication;
-using OBSChatBot.Handler;
-using OBSChatBot.Twitch;
 using OBSWebsocketDotNet;
 using System.Linq;
 using System.Text.RegularExpressions;
+using TwitchLib.Client;
+using TwitchLib.Client.Models;
+using TwitchLib.Client.Events;
 
 namespace OBSChatBot
 {
@@ -14,14 +15,14 @@ namespace OBSChatBot
     {
         static void Main(string[] args)
         {
-            Client client = AuthenticateLogin(args);
+            TwitchClient client = AuthenticateLogin(args);
             if (client != null)
             {
                 TextHandling(client);
             }
         }
 
-        private static Client AuthenticateLogin(string[] args)
+        private static TwitchClient AuthenticateLogin(string[] args)
         {
             string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
             if (!Directory.Exists(directory))
@@ -97,8 +98,9 @@ namespace OBSChatBot
 
                 Console.WriteLine("Authentication Success");
 
-                CliClientHandler clientHandler = new CliClientHandler();
-                Client client = new Client(success.Name, success.Token, clientHandler);
+                var credentials = new ConnectionCredentials(success.Name, success.Token);
+                var client = new TwitchClient();
+                client.Initialize(credentials);
                 client.Connect();
 
                 return client;
@@ -113,8 +115,11 @@ namespace OBSChatBot
             return null;
         }
 
-        private static void TextHandling(Client client)
+        private static void TextHandling(TwitchClient client)
         {
+            client.OnJoinedChannel += Client_OnJoinedChannel;
+            client.OnConnected += Client_OnConnected;
+
             #region Configure
             Console.WriteLine("Connect to channel:");
             string channel = Console.ReadLine();
@@ -148,8 +153,7 @@ namespace OBSChatBot
             Voting sceneVote = new Voting(action, choices, milliseconds, true, afterVote);
             votings.AddVoting(sceneVote);
 
-            CliChannelHandler channelHandler = new CliChannelHandler(votings, obs);
-            client.JoinChannel(channel, channelHandler);
+            client.JoinChannel(channel);
 
             string input;
             // Console commands
@@ -195,9 +199,9 @@ namespace OBSChatBot
             string input = Console.ReadLine();
 
             int milliseconds;
-            while (!int.TryParse(input, out milliseconds) || milliseconds < 10000)
+            while (!int.TryParse(input, out milliseconds))
             {
-                Console.WriteLine("Default vote time in milliseconds (>= 10000):");
+                Console.WriteLine("Default vote time in milliseconds:");
                 input = Console.ReadLine();
             }
 
@@ -209,5 +213,17 @@ namespace OBSChatBot
             var winner = result.ToArray()[0];
             obs.SetCurrentScene(winner.Choice);
         }
+
+        #region Events
+        private static void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
+        {
+            Console.WriteLine("Joined '{0}'", e.Channel);
+        }
+
+        private static void Client_OnConnected(object sender, OnConnectedArgs e)
+        {
+            Console.WriteLine("Connected as '{0}'", e.BotUsername);
+        }
+        #endregion
     }
 }

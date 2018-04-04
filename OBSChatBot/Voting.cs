@@ -1,10 +1,12 @@
-﻿using OBSChatBot.Twitch;
-using OBSWebsocketDotNet;
+﻿using OBSWebsocketDotNet;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TwitchLib.Client;
+using TwitchLib.Client.Events;
+using TwitchLib.Client.Models;
 
 namespace OBSChatBot
 {
@@ -78,7 +80,7 @@ namespace OBSChatBot
 
     public class VotingHandler
     {
-        public readonly Client Client;
+        public readonly TwitchClient Client;
         public readonly string Channel;
         public readonly int DefaultMilliseconds;
         public readonly Dictionary<string, Voting> Votings;
@@ -86,13 +88,14 @@ namespace OBSChatBot
 
         private static Voting emptyVoting = new Voting("", new string[0], 0, false);
 
-        public VotingHandler(Client client, string channel, OBSWebsocket obs, int defaultMilliseconds)
+        public VotingHandler(TwitchClient client, string channel, OBSWebsocket obs, int defaultMilliseconds)
         {
             Client = client;
             Channel = channel;
             Obs = obs;
             DefaultMilliseconds = defaultMilliseconds;
             Votings = new Dictionary<string, Voting>();
+            Client.OnMessageReceived += Client_OnMessageReceived;
         }
 
         public void ProcessMessage(string user, string message, bool isMod)
@@ -225,6 +228,16 @@ namespace OBSChatBot
             sb.Append(" (");
             sb.Append(resultValue.Votes);
             sb.Append(")");
+        }
+
+        private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
+        {
+            ChatMessage message = e.ChatMessage;
+            string msg = message.Message;
+            if (msg.StartsWith("!"))
+            {
+                ProcessMessage(message.Username, msg, message.IsModerator);
+            }
         }
     }
 

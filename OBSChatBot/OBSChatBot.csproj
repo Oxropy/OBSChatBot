@@ -124,15 +124,9 @@
   <ItemGroup>
     <Compile Include="Authentication\AuthenticationResult.cs" />
     <Compile Include="Authentication\TwitchAuthentication.cs" />
-    <Compile Include="Handler\CliChannelHandler.cs" />
-    <Compile Include="Handler\CliClientHandler.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Resources\TwitchResource.Designer.cs" />
-    <Compile Include="Twitch\Channel.cs" />
-    <Compile Include="Twitch\Client.cs" />
-    <Compile Include="Twitch\IChannelHandler.cs" />
-    <Compile Include="Twitch\IClientHandler.cs" />
     <Compile Include="Voting.cs" />
   </ItemGroup>
   <ItemGroup>
