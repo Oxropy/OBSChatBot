@@ -15,18 +15,16 @@ namespace OBSChatBot
         public readonly string ActionName;
         public Dictionary<string, int> Votes;
         public int Milliseconds;
-        public readonly bool AllowUserMultipleVotes;
-        public bool IsActive { get; private set; }
-        public readonly Action<OBSWebsocket, IEnumerable<VoteResultValue>> AfterVote;
+        public bool IsActive;
+        public readonly Action<OBSWebsocket, IEnumerable<Tuple<string, int>>> AfterVote;
         /// Key: lowercase, Value: scene
         public Dictionary<string, string> Choices;
         private List<string> Voters;
 
-        public Voting(string action, IEnumerable<string> choices, int milliseconds, bool allowUserMultipleVotes, Action<OBSWebsocket, IEnumerable<VoteResultValue>> afterVote = null)
+        public Voting(string action, IEnumerable<string> choices, int milliseconds, Action<OBSWebsocket, IEnumerable<Tuple<string, int>>> afterVote = null)
         {
             ActionName = action;
             Milliseconds = milliseconds;
-            AllowUserMultipleVotes = allowUserMultipleVotes;
             AfterVote = afterVote;
             Voters = new List<string>();
 
@@ -41,16 +39,14 @@ namespace OBSChatBot
             ResetVotes();
         }
 
-        public void AddVote(Vote vote)
+        public void AddVote(Tuple<string, string> vote)
         {
-            if (AllowUserMultipleVotes || (!AllowUserMultipleVotes && !Voters.Contains(vote.Voter)))
-            {
-                string lowerVote = vote.Choice.ToLower();
-                if (Choices.ContainsKey(lowerVote))
-                {
-                    Votes[lowerVote]++;
-                }
-            }
+            if (Voters.Contains(vote.Item1)) return;
+
+            string lowerVote = vote.Item2.ToLower();
+            if (!Choices.ContainsKey(lowerVote)) return;
+
+            Votes[lowerVote]++;
         }
 
         public void ResetVotes()
@@ -60,16 +56,6 @@ namespace OBSChatBot
             {
                 Votes.Add(choice.Key, 0);
             }
-        }
-
-        public void SetActive()
-        {
-            IsActive = true;
-        }
-
-        public void SetInActive()
-        {
-            IsActive = false;
         }
 
         public void SetNewVotetime(int milliseconds)
@@ -86,7 +72,7 @@ namespace OBSChatBot
         public readonly Dictionary<string, Voting> Votings;
         public readonly OBSWebsocket Obs;
 
-        private static Voting emptyVoting = new Voting("", new string[0], 0, false);
+        private static Voting emptyVoting = new Voting("", new string[0], 0);
 
         public VotingHandler(TwitchClient client, string channel, OBSWebsocket obs, int defaultMilliseconds)
         {
@@ -135,25 +121,25 @@ namespace OBSChatBot
             int seconds = voting.Milliseconds / 1000;
             Client.SendMessage(Channel, string.Format("Voting '{0}' has started! Voting runs {1} seconds.", voting.ActionName, seconds));
 
-            voting.SetActive();
+            voting.IsActive = true;
             await Task.Delay(voting.Milliseconds);
             var voteResult = new VoteResult(voting.Votes, voting.Choices);
-            voting.SetInActive();
+            voting.IsActive = false;
 
             Client.SendMessage(Channel, string.Format("Voting '{0}' has ended!", voting.ActionName));
 
             var result = voteResult.GetResult();
             ShowVotingResult(result);
-            
+
             voting.AfterVote?.Invoke(Obs, result);
             voting.ResetVotes();
         }
 
-        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0, bool allowUserMultipleVotes = false)
+        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0)
         {
             if (milliseconds == 0) milliseconds = DefaultMilliseconds;
 
-            Voting voting = new Voting(action, choices, milliseconds, allowUserMultipleVotes);
+            Voting voting = new Voting(action, choices, milliseconds);
             AddVoting(voting);
         }
 
@@ -173,12 +159,11 @@ namespace OBSChatBot
             Votings.Remove(action);
         }
 
-        public void AddVote(Voting voting, Vote vote)
+        public void AddVote(Voting voting, Tuple<string, string> vote)
         {
-            if (Votings.ContainsKey(voting.ActionName))
-            {
-                voting.AddVote(vote);
-            }
+            if (!Votings.ContainsKey(voting.ActionName)) return;
+
+            voting.AddVote(vote);
         }
 
         public Voting GetVotingInfo(string voting)
@@ -191,13 +176,12 @@ namespace OBSChatBot
 
         public void SetNewVotetime(string voting, int milliseconds)
         {
-            if (Votings.ContainsKey(voting))
-            {
-                Votings[voting].SetNewVotetime(milliseconds);
-            }
+            if (!Votings.ContainsKey(voting)) return;
+
+            Votings[voting].SetNewVotetime(milliseconds);
         }
 
-        public void ShowVotingResult(IEnumerable<VoteResultValue> result)
+        public void ShowVotingResult(IEnumerable<Tuple<string, int>> result)
         {
             StringBuilder sb = new StringBuilder();
             int votePosition = 1;
@@ -216,17 +200,17 @@ namespace OBSChatBot
                     AppendResultString(sb, v, votePosition);
                 }
             }
-            
+
             Client.SendMessage(Channel, sb.ToString());
         }
 
-        private void AppendResultString(StringBuilder sb, VoteResultValue resultValue, int position)
+        private void AppendResultString(StringBuilder sb, Tuple<string, int> resultValue, int position)
         {
             sb.Append(position);
             sb.Append(" - ");
-            sb.Append(resultValue.Choice);
+            sb.Append(resultValue.Item1);
             sb.Append(" (");
-            sb.Append(resultValue.Votes);
+            sb.Append(resultValue.Item2);
             sb.Append(")");
         }
 
@@ -252,37 +236,9 @@ namespace OBSChatBot
             Choices = choices;
         }
 
-        public IEnumerable<VoteResultValue> GetResult()
+        public IEnumerable<Tuple<string, int>> GetResult()
         {
-            // Sort by value
-            var result = (from pair in Votes orderby pair.Value descending select pair);
-
-            // return keys order by value
-            return result.Select(r => new VoteResultValue(Choices[r.Key], r.Value));
-        }
-    }
-
-    public class VoteResultValue
-    {
-        public readonly string Choice;
-        public readonly int Votes;
-
-        public VoteResultValue(string choice, int votes)
-        {
-            Choice = choice;
-            Votes = votes;
-        }
-    }
-
-    public class Vote
-    {
-        public readonly string Voter;
-        public readonly string Choice;
-
-        public Vote(string voter, string choice)
-        {
-            Voter = voter;
-            Choice = choice;
+            return Votes.OrderBy(r => r.Value).Select(r => new Tuple<string, int>(Choices[r.Key], r.Value));
         }
     }
 
@@ -296,30 +252,28 @@ namespace OBSChatBot
 
         public static void Vote(VotingHandler votingHandler, string user, string action, string choice)
         {
-            if (votingHandler.Votings.ContainsKey(action))
-            {
-                Voting voting = votingHandler.Votings[action];
-                if (!voting.IsActive) votingHandler.DoVoting(voting);
+            if (!votingHandler.Votings.ContainsKey(action)) return;
 
-                Vote vote = new Vote(user, choice);
-                votingHandler.AddVote(voting, vote);
-            }
+            Voting voting = votingHandler.Votings[action];
+            if (!voting.IsActive) votingHandler.DoVoting(voting);
+
+            var vote = new Tuple<string, string>(user, choice);
+            votingHandler.AddVote(voting, vote);
         }
 
-        public static void AddVoting(VotingHandler votingHandler, string action, string[] choices, int milliseconds, bool isMultiVote = true)
+        public static void AddVoting(VotingHandler votingHandler, string action, string[] choices, int milliseconds)
         {
-            Voting voting = new Voting(action, choices, milliseconds, isMultiVote);
+            Voting voting = new Voting(action, choices, milliseconds);
             votingHandler.AddVoting(voting);
         }
 
         public static void EditVotetime(VotingHandler votingHandler, string action, int milliseconds)
         {
-            if (votingHandler.Votings.ContainsKey(action) && milliseconds >= 10000)
-            {
-                Voting voting = votingHandler.Votings[action];
-                voting.SetNewVotetime(milliseconds);
-                votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Votetime for action '{0}' set to {1} sec", action, milliseconds / 1000));
-            }
+            if (!votingHandler.Votings.ContainsKey(action)) return;
+
+            Voting voting = votingHandler.Votings[action];
+            voting.SetNewVotetime(milliseconds);
+            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Votetime for action '{0}' set to {1} sec", action, milliseconds / 1000));
         }
 
         public static void DeleteVoting(VotingHandler votingHandler, string action)

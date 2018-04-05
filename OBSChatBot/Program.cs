@@ -149,8 +149,8 @@ namespace OBSChatBot
             List<OBSScene> scenes = obs.ListScenes();
             string[] choices = scenes.Where(s => reg.IsMatch(s.Name)).Select(s => s.Name).ToArray();
 
-            var afterVote = new Action<OBSWebsocket, IEnumerable<VoteResultValue>>(ChangeObsScene);
-            Voting sceneVote = new Voting(action, choices, milliseconds, true, afterVote);
+            var afterVote = new Action<OBSWebsocket, IEnumerable<Tuple<string, int>>>(ChangeObsScene);
+            Voting sceneVote = new Voting(action, choices, milliseconds, afterVote);
             votings.AddVoting(sceneVote);
 
             client.JoinChannel(channel);
@@ -184,7 +184,7 @@ namespace OBSChatBot
 
                     milliseconds = GetVotetime();
 
-                    Voting voting = new Voting(action, choices, milliseconds, true);
+                    Voting voting = new Voting(action, choices, milliseconds);
                     votings.AddVoting(voting);
                 }
             }
@@ -208,10 +208,10 @@ namespace OBSChatBot
             return milliseconds;
         }
 
-        private static void ChangeObsScene(OBSWebsocket obs, IEnumerable<VoteResultValue> result)
+        private static void ChangeObsScene(OBSWebsocket obs, IEnumerable<Tuple<string, int>> result)
         {
             var winner = result.ToArray()[0];
-            obs.SetCurrentScene(winner.Choice);
+            obs.SetCurrentScene(winner.Item1);
         }
 
         #region Events
