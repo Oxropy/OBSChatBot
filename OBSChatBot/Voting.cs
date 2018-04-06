@@ -41,12 +41,14 @@ namespace OBSChatBot
 
         public void AddVote(Tuple<string, string> vote)
         {
-            if (Voters.Contains(vote.Item1)) return;
+            string voter = vote.Item1.ToLower();
+            if (Voters.Contains(voter)) return;
 
             string lowerVote = vote.Item2.ToLower();
             if (!Choices.ContainsKey(lowerVote)) return;
 
             Votes[lowerVote]++;
+            Voters.Add(voter);
         }
 
         public void ResetVotes()
