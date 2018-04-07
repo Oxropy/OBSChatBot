@@ -4,10 +4,13 @@ using System.IO;
 using OBSChatBot.Authentication;
 using OBSWebsocketDotNet;
 using System.Linq;
+using System.Xml;
 using System.Text.RegularExpressions;
 using TwitchLib.Client;
 using TwitchLib.Client.Models;
 using TwitchLib.Client.Events;
+using TwitchLib.Client.Services;
+using System.Threading;
 
 namespace OBSChatBot
 {
@@ -15,23 +18,29 @@ namespace OBSChatBot
     {
         static void Main(string[] args)
         {
-            TwitchClient client = AuthenticateLogin(args);
+            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
+            var config = SetConfigFromFile(directory);
+
+            if (string.IsNullOrWhiteSpace(config.Item1) || string.IsNullOrWhiteSpace(config.Item3) || string.IsNullOrWhiteSpace(config.Item4))
+            {
+                Console.WriteLine("Config missing values!");
+                Console.ReadKey();
+                return;
+            }
+
+            TwitchClient client = AuthenticateLogin(directory, args, config.Item1);
             if (client != null)
             {
-                TextHandling(client);
+                TextHandling(directory, client, config.Item3, config.Item2, config.Item4, config.Item5, config.Item6);
             }
         }
 
-        private static TwitchClient AuthenticateLogin(string[] args)
+        private static TwitchClient AuthenticateLogin(string directory, string[] args, string user)
         {
-            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
             }
-
-            Console.WriteLine("Login user: ");
-            string user = Console.ReadLine();
 
             bool newToken = false;
             IAuthenticationResult authResponse;
@@ -58,11 +67,7 @@ namespace OBSChatBot
 
             if (!string.IsNullOrWhiteSpace(accessToken))
             {
-                //TODO: Refresh access token https://dev.twitch.tv/docs/authentication#refreshing-access-tokens
-                //TODO: Token validieren
                 authResponse = new SuccessfulAuthentication(user, accessToken);
-
-                //TODO: nicht in else, da es auch aufgerufen werden muss wenn das token nicht mehr gültig ist
             }
             else
             {
@@ -92,7 +97,6 @@ namespace OBSChatBot
                 // When new Token add Token
                 if (newToken)
                 {
-                    //TODO: save token
                     File.WriteAllLines(path, new[] { success.Token });
                 }
 
@@ -100,8 +104,18 @@ namespace OBSChatBot
 
                 var credentials = new ConnectionCredentials(success.Name, success.Token);
                 var client = new TwitchClient();
+                client.OnJoinedChannel += Client_OnJoinedChannel;
+                client.OnConnected += Client_OnConnected;
+
                 client.Initialize(credentials);
+                //client.ChatThrottler = new MessageThrottler(client, 20, TimeSpan.FromSeconds(30));
                 client.Connect();
+
+                while (!client.IsConnected)
+                {
+                    Thread.Sleep(500);
+                    Console.WriteLine("Sleeped 500ms");
+                }
 
                 return client;
             }
@@ -115,37 +129,15 @@ namespace OBSChatBot
             return null;
         }
 
-        private static void TextHandling(TwitchClient client)
+        private static void TextHandling(string directory, TwitchClient client, string channel, int milliseconds, string uri, string pw, string scenesRegex)
         {
-            client.OnJoinedChannel += Client_OnJoinedChannel;
-            client.OnConnected += Client_OnConnected;
-
-            #region Configure
-            Console.WriteLine("Connect to channel:");
-            string channel = Console.ReadLine();
-
-            int milliseconds = GetVotetime();
-
-            Console.WriteLine("Web socket IP, Default 'ws://localhost:4444':");
-            string uri = Console.ReadLine();
-            if (string.IsNullOrWhiteSpace(uri))
-            {
-                uri = "ws://localhost:4444";
-            }
-            Console.WriteLine("Web socket password: ");
-            string pw = Console.ReadLine();
-            #endregion
-
-            Console.WriteLine("Regex for OBS scenes:");
-            string scenesRegex = Console.ReadLine();
-            Regex reg = new Regex(scenesRegex);
-
             var obs = new OBSWebsocket();
             obs.Connect(uri, pw);
-
+            
             VotingHandler votings = new VotingHandler(client, channel, obs, milliseconds);
             // Add Scene voting
             string action = "scene";
+            Regex reg = new Regex(scenesRegex);
             List<OBSScene> scenes = obs.ListScenes();
             string[] choices = scenes.Where(s => reg.IsMatch(s.Name)).Select(s => s.Name).ToArray();
 
@@ -154,6 +146,8 @@ namespace OBSChatBot
             votings.AddVoting(sceneVote);
 
             client.JoinChannel(channel);
+
+            SetVotingsFromFile(directory, votings);
 
             string input;
             // Console commands
@@ -193,6 +187,100 @@ namespace OBSChatBot
             client.Disconnect();
         }
 
+        private static Tuple<string, int, string, string, string, string> SetConfigFromFile(string directory)
+        {
+            string user = string.Empty;
+            string channel = string.Empty;
+            int milliseconds = 0;
+            string uri = string.Empty;
+            string pw = string.Empty;
+            string sceneRegex = string.Empty;
+
+            string path = directory + "/config.xml";
+            if (File.Exists(path))
+            {
+                XmlDocument doc = new XmlDocument();
+                try
+                {
+                    doc.Load(path);
+
+                    foreach (XmlNode node in doc.DocumentElement.ChildNodes)
+                    {
+                        switch (node.LocalName)
+                        {
+                            case "user":
+                                user = node.InnerText;
+                                break;
+                            case "time":
+                                int.TryParse(node.InnerText, out milliseconds);
+                                break;
+                            case "channel":
+                                channel = node.InnerText;
+                                break;
+                            case "uri":
+                                uri = node.InnerText;
+                                break;
+                            case "pw":
+                                pw = node.InnerText;
+                                break;
+                            case "scene":
+                                sceneRegex = node.InnerText;
+                                break;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            else
+            {
+                Console.WriteLine("No config found!");
+            }
+
+            return new Tuple<string, int, string, string, string, string>(user, milliseconds, channel, uri, pw, sceneRegex);
+        }
+
+        private static void SetVotingsFromFile(string directory, VotingHandler votingHandler)
+        {
+            string path = directory + "/votings.xml";
+            if (File.Exists(path))
+            {
+                XmlDocument doc = new XmlDocument();
+                try
+                {
+                    doc.Load(path);
+
+                    foreach (XmlNode node in doc.DocumentElement)
+                    {
+                        string action = node.Attributes[0].InnerText;
+                        string time = node.Attributes[1].InnerText;
+                        if (!int.TryParse(time, out int milliseconds))
+                        {
+                            Console.WriteLine(string.Format("Action: '{0}' Time: '{1}' not valid!", action, time));
+                            continue;
+                        }
+                        List<string> choices = new List<string>();
+                        foreach (XmlNode child in node.ChildNodes)
+                        {
+                            choices.Add(child.InnerText);
+                        }
+
+                        votingHandler.AddVoting(action, choices, milliseconds);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            else
+            {
+                Console.WriteLine("No votings found!");
+            }
+        }
+
         private static int GetVotetime()
         {
             Console.WriteLine("Default vote time in milliseconds:");
@@ -213,16 +301,18 @@ namespace OBSChatBot
             var winner = result.ToArray()[0];
             obs.SetCurrentScene(winner.Item1);
         }
-
+        
         #region Events
         private static void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
         {
             Console.WriteLine("Joined '{0}'", e.Channel);
+            ((TwitchClient)sender).OnJoinedChannel -= Client_OnJoinedChannel;
         }
 
         private static void Client_OnConnected(object sender, OnConnectedArgs e)
         {
             Console.WriteLine("Connected as '{0}'", e.BotUsername);
+            ((TwitchClient)sender).OnConnected -= Client_OnConnected;
         }
         #endregion
     }
