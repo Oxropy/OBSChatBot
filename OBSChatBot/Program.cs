@@ -4,7 +4,6 @@ using System.IO;
 using OBSChatBot.Authentication;
 using OBSWebsocketDotNet;
 using System.Linq;
-using System.Xml;
 using System.Text.RegularExpressions;
 using TwitchLib.Client;
 using TwitchLib.Client.Models;
