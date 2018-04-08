@@ -11,6 +11,7 @@ using TwitchLib.Client.Models;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Services;
 using System.Threading;
+using Newtonsoft.Json;
 
 namespace OBSChatBot
 {
@@ -21,17 +22,17 @@ namespace OBSChatBot
             string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
             var config = SetConfigFromFile(directory);
 
-            if (string.IsNullOrWhiteSpace(config.Item1) || string.IsNullOrWhiteSpace(config.Item3) || string.IsNullOrWhiteSpace(config.Item4))
+            if (string.IsNullOrWhiteSpace(config.user) || string.IsNullOrWhiteSpace(config.channel) || string.IsNullOrWhiteSpace(config.uri))
             {
                 Console.WriteLine("Config missing values!");
                 Console.ReadKey();
                 return;
             }
 
-            TwitchClient client = AuthenticateLogin(directory, args, config.Item1);
+            TwitchClient client = AuthenticateLogin(directory, args, config.user);
             if (client != null)
             {
-                TextHandling(directory, client, config.Item3, config.Item2, config.Item4, config.Item5, config.Item6);
+                TextHandling(directory, client, config);
             }
         }
 
@@ -129,8 +130,14 @@ namespace OBSChatBot
             return null;
         }
 
-        private static void TextHandling(string directory, TwitchClient client, string channel, int milliseconds, string uri, string pw, string scenesRegex)
+        private static void TextHandling(string directory, TwitchClient client, Config config)
         {
+            string channel = config.channel;
+            int milliseconds = config.time;
+            string uri = config.uri;
+            string pw = config.pw;
+            string scenesRegex = config.scene;
+
             var obs = new OBSWebsocket();
             obs.Connect(uri, pw);
             
@@ -187,51 +194,24 @@ namespace OBSChatBot
             client.Disconnect();
         }
 
-        private static Tuple<string, int, string, string, string, string> SetConfigFromFile(string directory)
+        private static Config SetConfigFromFile(string directory)
         {
-            string user = string.Empty;
-            string channel = string.Empty;
-            int milliseconds = 0;
-            string uri = string.Empty;
-            string pw = string.Empty;
-            string sceneRegex = string.Empty;
+            Config config = new Config();
 
-            string path = directory + "/config.xml";
+            string path = directory + "/config.json";
             if (File.Exists(path))
             {
-                XmlDocument doc = new XmlDocument();
                 try
                 {
-                    doc.Load(path);
-
-                    foreach (XmlNode node in doc.DocumentElement.ChildNodes)
+                    using (StreamReader r = File.OpenText(path))
                     {
-                        switch (node.LocalName)
-                        {
-                            case "user":
-                                user = node.InnerText;
-                                break;
-                            case "time":
-                                int.TryParse(node.InnerText, out milliseconds);
-                                break;
-                            case "channel":
-                                channel = node.InnerText;
-                                break;
-                            case "uri":
-                                uri = node.InnerText;
-                                break;
-                            case "pw":
-                                pw = node.InnerText;
-                                break;
-                            case "scene":
-                                sceneRegex = node.InnerText;
-                                break;
-                        }
+                        string json = r.ReadToEnd();
+                        config = JsonConvert.DeserializeObject<Config>(json);
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    Console.WriteLine(string.Format("Config imoirt error: {0}", ex.Message));
                 }
             }
             else
@@ -239,46 +219,53 @@ namespace OBSChatBot
                 Console.WriteLine("No config found!");
             }
 
-            return new Tuple<string, int, string, string, string, string>(user, milliseconds, channel, uri, pw, sceneRegex);
+            return config;
+        }
+
+        public struct Config
+        {
+            public string user;
+            public int time;
+            public string channel;
+            public string uri;
+            public string pw;
+            public string scene;
         }
 
         private static void SetVotingsFromFile(string directory, VotingHandler votingHandler)
         {
-            string path = directory + "/votings.xml";
+            string path = directory + "/votings.json";
             if (File.Exists(path))
             {
-                XmlDocument doc = new XmlDocument();
                 try
                 {
-                    doc.Load(path);
-
-                    foreach (XmlNode node in doc.DocumentElement)
+                    using (StreamReader r = File.OpenText(path))
                     {
-                        string action = node.Attributes[0].InnerText;
-                        string time = node.Attributes[1].InnerText;
-                        if (!int.TryParse(time, out int milliseconds))
-                        {
-                            Console.WriteLine(string.Format("Action: '{0}' Time: '{1}' not valid!", action, time));
-                            continue;
-                        }
-                        List<string> choices = new List<string>();
-                        foreach (XmlNode child in node.ChildNodes)
-                        {
-                            choices.Add(child.InnerText);
-                        }
+                        string json = r.ReadToEnd();
+                        VotingValue[] votings = JsonConvert.DeserializeObject<VotingValue[]>(json);
 
-                        votingHandler.AddVoting(action, choices, milliseconds);
+                        foreach (var voting in votings)
+                        {
+                            votingHandler.AddVoting(voting.name, voting.choices, voting.time);
+                        }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.Message);
+                    Console.WriteLine(string.Format("Voting import error: {0}", ex.Message));
                 }
             }
             else
             {
                 Console.WriteLine("No votings found!");
             }
+        }
+
+        public struct VotingValue
+        {
+            public string name;
+            public int time;
+            public string[] choices;
         }
 
         private static int GetVotetime()
@@ -305,7 +292,7 @@ namespace OBSChatBot
         #region Events
         private static void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
         {
-            Console.WriteLine("Joined '{0}'", e.Channel);
+            Console.WriteLine("Joined channel '{0}'", e.Channel);
             ((TwitchClient)sender).OnJoinedChannel -= Client_OnJoinedChannel;
         }
 

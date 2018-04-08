@@ -92,9 +92,12 @@ namespace OBSChatBot
 
             switch (parts[0])
             {
-                case "!votieInfo": // Info for voting
+                case "!info": // List of commands
+                    ChatCommands.Info (this);
+                    break;
+                case "!voteInfo": // Info for voting
                     if (parts.Length != 2) return;
-                    ChatCommands.Info(this, parts[1]);
+                    ChatCommands.VoteInfo(this, parts[1]);
                     break;
                 case "!vote": // Vote for existing voting
                     if (parts.Length != 3) return;
@@ -112,7 +115,7 @@ namespace OBSChatBot
                     if (parts.Length != 2 || !isMod) return;
                     ChatCommands.DeleteVoting(this, parts[1]);
                     break;
-                case "!votings":
+                case "!votings": // Existing votings
                     ChatCommands.Votings(this);
                     break;
             }
@@ -247,10 +250,27 @@ namespace OBSChatBot
 
     public static class ChatCommands
     {
-        public static void Info(VotingHandler votingHandler, string action)
+        public static void Info(VotingHandler votingHandler)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.Append("!voteInfo: Info for voting");
+            sb.Append(" | ");
+            sb.Append("!vote: Vote for existing voting");
+            sb.Append(" | ");
+            sb.Append("!addVoting [Mod]: Create new voting");
+            sb.Append(" | ");
+            sb.Append("!editVoteTime [Mod]: Change time for voting");
+            sb.Append(" | ");
+            sb.Append("!deleteVoting [Mod]: Remove voting");
+            sb.Append(" | ");
+            sb.Append("!votings: Existing votings");
+            votingHandler.Client.SendMessage(votingHandler.Channel, sb.ToString());
+        }
+
+        public static void VoteInfo(VotingHandler votingHandler, string action)
         {
             Voting vote = votingHandler.GetVotingInfo(action);
-            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Action: {0}, Choices: {1}, Vote time: {2}", vote.ActionName, string.Join(" | ", vote.Choices.Values), vote.Milliseconds));
+            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Action: {0}, Choices: {1}, Vote time: {2} sec", vote.ActionName, string.Join(" | ", vote.Choices.Values), vote.Milliseconds / 1000));
         }
 
         public static void Vote(VotingHandler votingHandler, string user, string action, string choice)
