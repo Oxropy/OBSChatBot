@@ -28,15 +28,17 @@ namespace OBSChatBot
                 return;
             }
 
-            TwitchClient client = AuthenticateLogin(directory, args, config.user);
+            TwitchClient client = AuthenticateLogin(directory, config);
             if (client != null)
             {
                 TextHandling(directory, client, config);
             }
         }
 
-        private static TwitchClient AuthenticateLogin(string directory, string[] args, string user)
+        private static TwitchClient AuthenticateLogin(string directory, Config config)
         {
+            string user = config.user;
+
             if (!Directory.Exists(directory))
             {
                 Directory.CreateDirectory(directory);
@@ -71,17 +73,23 @@ namespace OBSChatBot
             }
             else
             {
-                if (args.Length < 2)
+                if (string.IsNullOrWhiteSpace(config.clientId))
                 {
-                    Console.WriteLine("Too few arguments!");
-                    Console.WriteLine("Usage: {0} <client id> <client secret>", Environment.GetCommandLineArgs()[0]);
+                    Console.WriteLine("ClientId is missing!");
+                    Console.ReadKey();
+                    Environment.Exit(1);
+                    return null;
+                }
+                if (string.IsNullOrWhiteSpace(config.clientSecret))
+                {
+                    Console.WriteLine("ClientSecret is missing!");
                     Console.ReadKey();
                     Environment.Exit(1);
                     return null;
                 }
 
-                string clientId = args[0];
-                string clientSecret = args[1];
+                string clientId = config.clientId;
+                string clientSecret = config.clientSecret;
 
                 authResponse = TwitchAuthentication.Authenticate(clientId, clientSecret, url =>
                 {
@@ -229,6 +237,8 @@ namespace OBSChatBot
             public string uri;
             public string pw;
             public string scene;
+            public string clientId;
+            public string clientSecret;
         }
 
         private static void SetVotingsFromFile(string directory, VotingHandler votingHandler)
