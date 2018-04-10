@@ -7,7 +7,6 @@ using System.Collections.Specialized;
 using System.Net;
 using System.Text;
 using System.Web;
-using OBSChatBot.Resources;
 
 namespace OBSChatBot.Authentication
 {
@@ -20,28 +19,30 @@ namespace OBSChatBot.Authentication
             return Guid.NewGuid().ToString("N");
         }
 
-        public static IAuthenticationResult Authenticate(string clientId, string clientSecret, Func<string, string> func)
+        public static IAuthenticationResult Authenticate(string clientId, string clientSecret, string redirectHost, string redirectUri, Func<string, string> func)
         {
             string state = GetState();
-            string url = AuthUri(state, clientId);
+            string url = AuthUri(state, clientId, redirectHost);
             string returnUrl = func(url);
-            return AuthRequest(returnUrl, state, clientId, clientSecret);
+            return AuthRequest(returnUrl, state, clientId, clientSecret, redirectUri);
         }
 
-        public static string AuthUri(string state, string clientId)
+        public static string AuthUri(string state, string clientId, string redirectHost)
         {
+            string scope = "chat_login+user_read";
+
             StringBuilder sb = new StringBuilder();
             sb.Append("https://api.twitch.tv/kraken/oauth2/authorize");
             sb.AppendFormat("?client_id={0}", clientId);
-            sb.AppendFormat("&redirect_uri={0}", TwitchResource.RedirectUri);
+            sb.AppendFormat("&redirect_uri={0}", redirectHost);
             sb.Append("&response_type=code");
-            sb.AppendFormat("&scope={0}", TwitchResource.Scope);
+            sb.AppendFormat("&scope={0}", scope);
             sb.AppendFormat("&state={0}", state);
 
             return sb.ToString();
         }
 
-        public static IAuthenticationResult AuthRequest(string uriQuery, string state, string clientId, string clientSecret)
+        public static IAuthenticationResult AuthRequest(string uriQuery, string state, string clientId, string clientSecret, string redirectUri)
         {
             NameValueCollection nvc = HttpUtility.ParseQueryString(uriQuery);
 
@@ -59,7 +60,7 @@ namespace OBSChatBot.Authentication
                     request.AddParameter("client_secret", clientSecret);
                     request.AddParameter("code", code);
                     request.AddParameter("grant_type", "authorization_code");
-                    request.AddParameter("redirect_uri", TwitchResource.RedirectUri);
+                    request.AddParameter("redirect_uri", redirectUri);
                     request.AddParameter("state", state);
 
                     IRestResponse<TwitchResponse> response = client.Execute<TwitchResponse>(request);

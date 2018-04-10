@@ -91,7 +91,7 @@ namespace OBSChatBot
                 string clientId = config.clientId;
                 string clientSecret = config.clientSecret;
 
-                authResponse = TwitchAuthentication.Authenticate(clientId, clientSecret, url =>
+                authResponse = TwitchAuthentication.Authenticate(clientId, clientSecret, config.redirectHost, config.redirectUri, url =>
                 {
                     Console.WriteLine("Log in URL:");
                     Console.WriteLine(url);
@@ -239,6 +239,8 @@ namespace OBSChatBot
             public string scene;
             public string clientId;
             public string clientSecret;
+            public string redirectHost;
+            public string redirectUri;
         }
 
         private static void SetVotingsFromFile(string directory, VotingHandler votingHandler)
