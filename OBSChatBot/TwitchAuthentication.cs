@@ -93,7 +93,7 @@ namespace OBSChatBot.Authentication
 
             return new FailedAuthentication(AuthenticationFailure.Unknown);
         }
-
+        
 #pragma warning disable IDE1006
         public class TwitchResponse
         {
@@ -121,5 +121,43 @@ namespace OBSChatBot.Authentication
 #pragma warning restore IDE1006
 
 
+    }
+
+    public interface IAuthenticationResult { }
+
+    public class SuccessfulAuthentication : IAuthenticationResult
+    {
+        public string Name;
+        public string Token;
+
+        public SuccessfulAuthentication(string name, string token)
+        {
+            Name = name;
+            Token = token;
+        }
+    }
+
+    public class FailedAuthentication : IAuthenticationResult
+    {
+        public AuthenticationFailure Failure;
+        public string Reason;
+
+        public FailedAuthentication(AuthenticationFailure failure, string reason)
+        {
+            Failure = failure;
+            Reason = reason;
+        }
+
+        public FailedAuthentication(AuthenticationFailure failure)
+        {
+            Failure = failure;
+        }
+    }
+
+    public enum AuthenticationFailure
+    {
+        InvalidState,
+        HttpError,
+        Unknown
     }
 }

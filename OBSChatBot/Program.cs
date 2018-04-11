@@ -8,7 +8,6 @@ using System.Text.RegularExpressions;
 using TwitchLib.Client;
 using TwitchLib.Client.Models;
 using TwitchLib.Client.Events;
-using TwitchLib.Client.Services;
 using System.Threading;
 using Newtonsoft.Json;
 
@@ -229,19 +228,21 @@ namespace OBSChatBot
             return config;
         }
 
+#pragma warning disable IDE1006
         public struct Config
         {
-            public string user;
-            public int time;
-            public string channel;
-            public string uri;
-            public string pw;
-            public string scene;
-            public string clientId;
-            public string clientSecret;
-            public string redirectHost;
-            public string redirectUri;
+            public string user { get; set; }
+            public int time { get; set; }
+            public string channel { get; set; }
+            public string uri { get; set; }
+            public string pw { get; set; } 
+            public string scene { get; set; }
+            public string clientId { get; set; }
+            public string clientSecret { get; set; } 
+            public string redirectHost { get; set; } 
+            public string redirectUri { get; set; }
         }
+#pragma warning restore IDE1006
 
         private static void SetVotingsFromFile(string directory, VotingHandler votingHandler)
         {
@@ -272,12 +273,14 @@ namespace OBSChatBot
             }
         }
 
+#pragma warning disable IDE1006
         public struct VotingValue
         {
-            public string name;
-            public int time;
-            public string[] choices;
+            public string name { get; set; }
+            public int time { get; set; }
+            public string[] choices { get; set; }
         }
+#pragma warning restore IDE1006
 
         private static int GetVotetime()
         {
