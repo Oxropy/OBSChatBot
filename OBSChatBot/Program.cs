@@ -38,17 +38,10 @@ namespace OBSChatBot
         {
             string user = config.user;
 
-            if (!Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
+            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
 
             bool newToken = false;
-            IAuthenticationResult authResponse;
-
             string accessToken = string.Empty;
-
-            #region read accesToken
             string path = directory + "/Token.txt";
             if (File.Exists(path))
             {
@@ -64,48 +57,28 @@ namespace OBSChatBot
                     Console.WriteLine("The file could not be read: {0}", e.Message);
                 }
             }
-            #endregion
 
+            IAuthenticationResult authResponse;
             if (!string.IsNullOrWhiteSpace(accessToken))
             {
                 authResponse = new SuccessfulAuthentication(user, accessToken);
             }
             else
             {
-                if (string.IsNullOrWhiteSpace(config.clientId))
-                {
-                    Console.WriteLine("ClientId is missing!");
-                    Console.ReadKey();
-                    Environment.Exit(1);
-                    return null;
-                }
-                if (string.IsNullOrWhiteSpace(config.clientSecret))
-                {
-                    Console.WriteLine("ClientSecret is missing!");
-                    Console.ReadKey();
-                    Environment.Exit(1);
-                    return null;
-                }
+                var state = TwitchAuthentication.GenerateState();
+                var url = TwitchAuthentication.AuthUri(state, config.clientId, config.redirectHost);
+                Console.WriteLine("Log in URL:");
+                Console.WriteLine(url);
+                var returnedUrl = Console.ReadLine();
 
-                string clientId = config.clientId;
-                string clientSecret = config.clientSecret;
-
-                authResponse = TwitchAuthentication.Authenticate(clientId, clientSecret, config.redirectHost, config.redirectUri, url =>
-                {
-                    Console.WriteLine("Log in URL:");
-                    Console.WriteLine(url);
-                    return Console.ReadLine();
-                });
+                authResponse = TwitchAuthentication.AuthRequest(returnedUrl, state, config.clientId, config.clientSecret, config.redirectUri);
                 newToken = true;
             }
 
             if (authResponse is SuccessfulAuthentication success)
             {
                 // When new Token add Token
-                if (newToken)
-                {
-                    File.WriteAllLines(path, new[] { success.Token });
-                }
+                if (newToken) File.WriteAllLines(path, new[] { success.Token });
 
                 Console.WriteLine("Authentication Success");
 
@@ -228,7 +201,6 @@ namespace OBSChatBot
             return config;
         }
 
-#pragma warning disable IDE1006
         public struct Config
         {
             public string user { get; set; }
@@ -242,7 +214,6 @@ namespace OBSChatBot
             public string redirectHost { get; set; } 
             public string redirectUri { get; set; }
         }
-#pragma warning restore IDE1006
 
         private static void SetVotingsFromFile(string directory, VotingHandler votingHandler)
         {
@@ -273,14 +244,12 @@ namespace OBSChatBot
             }
         }
 
-#pragma warning disable IDE1006
         public struct VotingValue
         {
             public string name { get; set; }
             public int time { get; set; }
             public string[] choices { get; set; }
         }
-#pragma warning restore IDE1006
 
         private static int GetVotetime()
         {
@@ -303,7 +272,6 @@ namespace OBSChatBot
             obs.SetCurrentScene(winner.Item1);
         }
         
-        #region Events
         private static void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
         {
             Console.WriteLine("Joined channel '{0}'", e.Channel);
@@ -315,6 +283,5 @@ namespace OBSChatBot
             Console.WriteLine("Connected as '{0}'", e.BotUsername);
             ((TwitchClient)sender).OnConnected -= Client_OnConnected;
         }
-        #endregion
     }
 }

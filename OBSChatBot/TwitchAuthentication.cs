@@ -1,79 +1,61 @@
-﻿using log4net;
-using RestSharp;
+﻿using RestSharp;
 using RestSharp.Authenticators;
 using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
 using System.Net;
-using System.Text;
 using System.Web;
 
 namespace OBSChatBot.Authentication
 {
     public static class TwitchAuthentication
     {
-        static ILog logger = LogManager.GetLogger(typeof(TwitchAuthentication));
-
-        public static string GetState()
+        public static string GenerateState()
         {
             return Guid.NewGuid().ToString("N");
         }
 
-        public static IAuthenticationResult Authenticate(string clientId, string clientSecret, string redirectHost, string redirectUri, Func<string, string> func)
-        {
-            string state = GetState();
-            string url = AuthUri(state, clientId, redirectHost);
-            string returnUrl = func(url);
-            return AuthRequest(returnUrl, state, clientId, clientSecret, redirectUri);
-        }
-
         public static string AuthUri(string state, string clientId, string redirectHost)
         {
-            string scope = "chat_login+user_read";
+            const string scope = "chat_login+user_read";
 
-            StringBuilder sb = new StringBuilder();
-            sb.Append("https://api.twitch.tv/kraken/oauth2/authorize");
-            sb.AppendFormat("?client_id={0}", clientId);
-            sb.AppendFormat("&redirect_uri={0}", redirectHost);
-            sb.Append("&response_type=code");
-            sb.AppendFormat("&scope={0}", scope);
-            sb.AppendFormat("&state={0}", state);
+            var query = HttpUtility.ParseQueryString(string.Empty);
+            query.Add("client_id", clientId);
+            query.Add("redirect_uri", redirectHost);
+            query.Add("response_type", "code");
+            query.Add("scope", scope);
+            query.Add("state", state);
 
-            return sb.ToString();
+            return $"https://api.twitch.tv/kraken/oauth2/authorize?{query}";
         }
 
-        public static IAuthenticationResult AuthRequest(string uriQuery, string state, string clientId, string clientSecret, string redirectUri)
+        public static IAuthenticationResult AuthRequest(string returnedUrl, string expectedState, string clientId, string clientSecret, string redirectUri)
         {
-            NameValueCollection nvc = HttpUtility.ParseQueryString(uriQuery);
-
-            if (nvc["state"] == state)
+            if (returnedUrl.Contains("?")) returnedUrl = returnedUrl.Substring(returnedUrl.IndexOf('?') + 1);
+        
+            var args = HttpUtility.ParseQueryString(returnedUrl);
+            if (args["state"] == expectedState)
             {
                 try
                 {
-                    string code = nvc["code"];
-
+                    string code = args["code"];
                     var client = new RestClient("https://api.twitch.tv/kraken");
 
-                    #region Request Acces_Token
                     var request = new RestRequest("oauth2/token", Method.POST);
                     request.AddParameter("client_id", clientId);
                     request.AddParameter("client_secret", clientSecret);
                     request.AddParameter("code", code);
                     request.AddParameter("grant_type", "authorization_code");
                     request.AddParameter("redirect_uri", redirectUri);
-                    request.AddParameter("state", state);
+                    request.AddParameter("state", expectedState);
 
-                    IRestResponse<TwitchResponse> response = client.Execute<TwitchResponse>(request);
-                    #endregion
+                    var response = client.Execute<TwitchResponse>(request);
                     if (response.StatusCode == HttpStatusCode.OK)
                     {
-                        #region Request User
                         var requestUser = new RestRequest("user", Method.GET);
                         client.Authenticator = new OAuth2AuthorizationRequestHeaderAuthenticator(response.Data.access_token);
                         requestUser.AddHeader("Client-ID", clientId);
 
-                        IRestResponse<TwitchUserResponse> responseUser = client.Execute<TwitchUserResponse>(requestUser);
-                        #endregion
+                        var responseUser = client.Execute<TwitchUserResponse>(requestUser);
                         if (response.StatusCode == HttpStatusCode.OK)
                         {
                             return new SuccessfulAuthentication(responseUser.Data.name, response.Data.access_token);
@@ -83,28 +65,24 @@ namespace OBSChatBot.Authentication
                 }
                 catch (Exception ex)
                 {
-                    logger.ErrorFormat("Error: {0}", ex);
+                    Console.WriteLine("Error: {0}", ex);
                 }
             }
             else
             {
                 return new FailedAuthentication(AuthenticationFailure.InvalidState);
             }
-
             return new FailedAuthentication(AuthenticationFailure.Unknown);
         }
         
-#pragma warning disable IDE1006
-        public class TwitchResponse
+        public struct TwitchResponse
         {
             public string access_token { get; set; }
             public string refresh_token { get; set; }
             public List<string> scope { get; set; }
         }
-#pragma warning restore IDE1006
 
-#pragma warning disable IDE1006
-        public class TwitchUserResponse
+        public struct TwitchUserResponse
         {
             public string _id { get; set; }
             public string bio { get; set; }
@@ -118,9 +96,6 @@ namespace OBSChatBot.Authentication
             public string type { get; set; }
             public string updated_at { get; set; }
         }
-#pragma warning restore IDE1006
-
-
     }
 
     public interface IAuthenticationResult { }

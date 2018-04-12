@@ -59,11 +59,6 @@ namespace OBSChatBot
                 Votes.Add(choice.Key, 0);
             }
         }
-
-        public void SetNewVotetime(int milliseconds)
-        {
-            Milliseconds = milliseconds;
-        }
     }
 
     public class VotingHandler
@@ -173,7 +168,6 @@ namespace OBSChatBot
 
         public Voting GetVotingInfo(string voting)
         {
-            // Voting does not exist, return empty voting
             if (!Votings.ContainsKey(voting)) return emptyVoting;
 
             return Votings[voting];
@@ -184,7 +178,7 @@ namespace OBSChatBot
             action = action.ToLower();
             if (!Votings.ContainsKey(action)) return;
 
-            Votings[action].SetNewVotetime(milliseconds);
+            Votings[action].Milliseconds = milliseconds;
         }
 
         public void ShowVotingResult(IEnumerable<Tuple<string, int>> result)
@@ -253,16 +247,11 @@ namespace OBSChatBot
         public static void Info(VotingHandler votingHandler)
         {
             StringBuilder sb = new StringBuilder();
-            sb.Append("!voteInfo: Info for voting");
-            sb.Append(" | ");
-            sb.Append("!vote: Vote for existing voting");
-            sb.Append(" | ");
-            sb.Append("!addVoting [Mod]: Create new voting");
-            sb.Append(" | ");
-            sb.Append("!editVoteTime [Mod]: Change time for voting");
-            sb.Append(" | ");
-            sb.Append("!deleteVoting [Mod]: Remove voting");
-            sb.Append(" | ");
+            sb.Append("!voteInfo: Info for voting | ");
+            sb.Append("!vote: Vote for existing voting | ");
+            sb.Append("!addVoting [Mod]: Create new voting | ");
+            sb.Append("!editVoteTime [Mod]: Change time for voting | ");
+            sb.Append("!deleteVoting [Mod]: Remove voting | ");
             sb.Append("!votings: Existing votings");
             votingHandler.Client.SendMessage(votingHandler.Channel, sb.ToString());
         }
@@ -295,7 +284,7 @@ namespace OBSChatBot
             if (!votingHandler.Votings.ContainsKey(action)) return;
 
             Voting voting = votingHandler.Votings[action];
-            voting.SetNewVotetime(milliseconds);
+            voting.Milliseconds = milliseconds;
             votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Votetime for action '{0}' set to {1} sec", action, milliseconds / 1000));
         }
 
