@@ -10,6 +10,7 @@ using TwitchLib.Client.Models;
 using TwitchLib.Client.Events;
 using System.Threading;
 using Newtonsoft.Json;
+using System.Threading.Tasks;
 
 namespace OBSChatBot
 {
@@ -27,14 +28,26 @@ namespace OBSChatBot
                 return;
             }
 
-            TwitchClient client = AuthenticateLogin(directory, config);
-            if (client != null)
+            var authResponse = AuthenticateLogin(directory, config);
+            if (authResponse != null)
             {
-                TextHandling(directory, client, config);
+                if (authResponse is FailedAuthentication failure)
+                {
+                    Console.WriteLine("Authentication Failure: {0}; Reason: {1}", failure.Failure, failure.Reason);
+                    Console.ReadKey();
+                    return;
+                }
+
+                if (authResponse is SuccessfulAuthentication success)
+                {
+                    RunBot(directory, success.Name, success.Token, config.channel);
+
+
+                }
             }
         }
 
-        private static TwitchClient AuthenticateLogin(string directory, Config config)
+        private static IAuthenticationResult AuthenticateLogin(string directory, Config config)
         {
             string user = config.user;
 
@@ -81,32 +94,58 @@ namespace OBSChatBot
                 if (newToken) File.WriteAllLines(path, new[] { success.Token });
 
                 Console.WriteLine("Authentication Success");
-
-                var credentials = new ConnectionCredentials(success.Name, success.Token);
-                var client = new TwitchClient();
-                client.OnJoinedChannel += Client_OnJoinedChannel;
-                client.OnConnected += Client_OnConnected;
-
-                client.Initialize(credentials);
-                //client.ChatThrottler = new MessageThrottler(client, 20, TimeSpan.FromSeconds(30));
-                client.Connect();
-
-                while (!client.IsConnected)
-                {
-                    Thread.Sleep(500);
-                    Console.WriteLine("Sleeped 500ms");
-                }
-
-                return client;
             }
-            else
+
+            return authResponse;
+        }
+
+        private static async Task<bool> RunBot(string directory, string name, string token, string channelName)
+        {
+            var source = new TaskCompletionSource<bool>();
+
+            var client = await InitBot(name, token);
+            Console.WriteLine("Connected as '{0}'", name);
+            var channel = await JoinChannel(client, channelName);
+            Console.WriteLine("Joined channel '{0}'", channelName);
+            client.SendMessage(channel, "Voting is active!");
+
+            return true;
+        }
+
+        private static Task<TwitchClient> InitBot(string name, string token)
+        {
+            var source = new TaskCompletionSource<TwitchClient>();
+            var client = new TwitchClient();
+
+            void Client_OnConnected(object sender, OnConnectedArgs e)
             {
-                var failure = authResponse as FailedAuthentication;
-                Console.WriteLine("Authentication Failure: {0}; Reason: {1}", failure.Failure, failure.Reason);
-
-                Console.ReadKey();
+                client.OnConnected -= Client_OnConnected;
+                source.SetResult(client);
             }
-            return null;
+
+            client.OnConnected += Client_OnConnected;
+            client.Initialize(new ConnectionCredentials(name, token));
+            client.Connect();
+
+            return source.Task;
+        }
+
+        private static Task<JoinedChannel> JoinChannel(TwitchClient client, string channel)
+        {
+            var source = new TaskCompletionSource<JoinedChannel>();
+
+            void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
+            {
+                if (e.Channel == channel)
+                {
+                    client.OnJoinedChannel -= Client_OnJoinedChannel;
+                    source.SetResult(client.GetJoinedChannel(channel));
+                }
+            }
+
+            client.OnJoinedChannel += Client_OnJoinedChannel;
+            client.JoinChannel(channel);
+            return source.Task;
         }
 
         private static void TextHandling(string directory, TwitchClient client, Config config)
@@ -119,7 +158,7 @@ namespace OBSChatBot
 
             var obs = new OBSWebsocket();
             obs.Connect(uri, pw);
-            
+
             VotingHandler votings = new VotingHandler(client, channel, obs, milliseconds);
             // Add Scene voting
             string action = "scene";
@@ -130,8 +169,6 @@ namespace OBSChatBot
             var afterVote = new Action<OBSWebsocket, IEnumerable<Tuple<string, int>>>(ChangeObsScene);
             Voting sceneVote = new Voting(action, choices, milliseconds, afterVote);
             votings.AddVoting(sceneVote);
-
-            client.JoinChannel(channel);
 
             SetVotingsFromFile(directory, votings);
 
@@ -207,11 +244,11 @@ namespace OBSChatBot
             public int time { get; set; }
             public string channel { get; set; }
             public string uri { get; set; }
-            public string pw { get; set; } 
+            public string pw { get; set; }
             public string scene { get; set; }
             public string clientId { get; set; }
-            public string clientSecret { get; set; } 
-            public string redirectHost { get; set; } 
+            public string clientSecret { get; set; }
+            public string redirectHost { get; set; }
             public string redirectUri { get; set; }
         }
 
@@ -253,15 +290,13 @@ namespace OBSChatBot
 
         private static int GetVotetime()
         {
-            Console.WriteLine("Default vote time in milliseconds:");
-            string input = Console.ReadLine();
-
+            string input;
             int milliseconds;
-            while (!int.TryParse(input, out milliseconds))
+            do
             {
                 Console.WriteLine("Default vote time in milliseconds:");
                 input = Console.ReadLine();
-            }
+            } while (!int.TryParse(input, out milliseconds));
 
             return milliseconds;
         }
@@ -270,18 +305,6 @@ namespace OBSChatBot
         {
             var winner = result.ToArray()[0];
             obs.SetCurrentScene(winner.Item1);
-        }
-        
-        private static void Client_OnJoinedChannel(object sender, OnJoinedChannelArgs e)
-        {
-            Console.WriteLine("Joined channel '{0}'", e.Channel);
-            ((TwitchClient)sender).OnJoinedChannel -= Client_OnJoinedChannel;
-        }
-
-        private static void Client_OnConnected(object sender, OnConnectedArgs e)
-        {
-            Console.WriteLine("Connected as '{0}'", e.BotUsername);
-            ((TwitchClient)sender).OnConnected -= Client_OnConnected;
         }
     }
 }

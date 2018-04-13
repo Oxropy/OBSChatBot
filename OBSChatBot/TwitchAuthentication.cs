@@ -100,7 +100,7 @@ namespace OBSChatBot.Authentication
 
     public interface IAuthenticationResult { }
 
-    public class SuccessfulAuthentication : IAuthenticationResult
+    public struct SuccessfulAuthentication : IAuthenticationResult
     {
         public string Name;
         public string Token;
@@ -112,20 +112,15 @@ namespace OBSChatBot.Authentication
         }
     }
 
-    public class FailedAuthentication : IAuthenticationResult
+    public struct FailedAuthentication : IAuthenticationResult
     {
         public AuthenticationFailure Failure;
         public string Reason;
 
-        public FailedAuthentication(AuthenticationFailure failure, string reason)
+        public FailedAuthentication(AuthenticationFailure failure, string reason = "")
         {
             Failure = failure;
             Reason = reason;
-        }
-
-        public FailedAuthentication(AuthenticationFailure failure)
-        {
-            Failure = failure;
         }
     }
 
