@@ -5,8 +5,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TwitchLib.Client;
-using TwitchLib.Client.Events;
-using TwitchLib.Client.Models;
 
 namespace OBSChatBot
 {
@@ -27,15 +25,7 @@ namespace OBSChatBot
             Milliseconds = milliseconds;
             AfterVote = afterVote;
             Voters = new List<string>();
-
-            Choices = new Dictionary<string, string>();
-
-            choices = choices.Distinct();
-            foreach (var choice in choices)
-            {
-                Choices.Add(choice.ToLower(), choice);
-            }
-
+            Choices = choices.Distinct().ToDictionary(c => c.ToLower(), c => c );
             ResetVotes();
         }
 
@@ -59,6 +49,11 @@ namespace OBSChatBot
                 Votes.Add(choice.Key, 0);
             }
         }
+
+        public IEnumerable<Tuple<string, int>> GetResult()
+        {
+            return Votes.OrderByDescending(r => r.Value).Select(r => new Tuple<string, int>(Choices[r.Key], r.Value));
+        }
     }
 
     public class VotingHandler
@@ -71,19 +66,20 @@ namespace OBSChatBot
 
         private static Voting emptyVoting = new Voting("", new string[0], 0);
 
-        public VotingHandler(TwitchClient client, string channel, OBSWebsocket obs, int defaultMilliseconds)
+        public VotingHandler(TwitchClient client, OBSWebsocket obs, string channel, int defaultMilliseconds)
         {
             Client = client;
-            Channel = channel;
             Obs = obs;
+            Channel = channel;
             DefaultMilliseconds = defaultMilliseconds;
             Votings = new Dictionary<string, Voting>();
-            Client.OnMessageReceived += Client_OnMessageReceived;
         }
 
-        public void ProcessMessage(string user, string message, bool isMod)
+        public void ProcessMessage(Tuple<bool, string, string[]> message)
         {
-            string[] parts = message.Split(' ');
+            bool isMod = message.Item1;
+            string user = message.Item2;
+            string[] parts = message.Item3;
 
             switch (parts[0])
             {
@@ -123,12 +119,11 @@ namespace OBSChatBot
 
             voting.IsActive = true;
             await Task.Delay(voting.Milliseconds);
-            var voteResult = new VoteResult(voting.Votes, voting.Choices);
             voting.IsActive = false;
 
             Client.SendMessage(Channel, string.Format("Voting '{0}' has ended!", voting.ActionName));
 
-            var result = voteResult.GetResult();
+            var result = voting.GetResult();
             ShowVotingResult(result);
 
             voting.AfterVote?.Invoke(Obs, result);
@@ -213,33 +208,6 @@ namespace OBSChatBot
             sb.Append(resultValue.Item2);
             sb.Append(")");
         }
-
-        private void Client_OnMessageReceived(object sender, OnMessageReceivedArgs e)
-        {
-            ChatMessage message = e.ChatMessage;
-            string msg = message.Message;
-            if (msg.StartsWith("!"))
-            {
-                ProcessMessage(message.Username, msg, message.IsModerator);
-            }
-        }
-    }
-
-    public class VoteResult
-    {
-        public readonly Dictionary<string, int> Votes;
-        public readonly Dictionary<string, string> Choices;
-
-        public VoteResult(Dictionary<string, int> votes, Dictionary<string, string> choices)
-        {
-            Votes = votes;
-            Choices = choices;
-        }
-
-        public IEnumerable<Tuple<string, int>> GetResult()
-        {
-            return Votes.OrderByDescending(r => r.Value).Select(r => new Tuple<string, int>(Choices[r.Key], r.Value));
-        }
     }
 
     public static class ChatCommands
@@ -247,12 +215,12 @@ namespace OBSChatBot
         public static void Info(VotingHandler votingHandler)
         {
             StringBuilder sb = new StringBuilder();
+            sb.Append("!votings: Existing votings | ");
             sb.Append("!voteInfo: Info for voting | ");
             sb.Append("!vote: Vote for existing voting | ");
             sb.Append("!addVoting [Mod]: Create new voting | ");
             sb.Append("!editVoteTime [Mod]: Change time for voting | ");
-            sb.Append("!deleteVoting [Mod]: Remove voting | ");
-            sb.Append("!votings: Existing votings");
+            sb.Append("!deleteVoting [Mod]: Remove voting");
             votingHandler.Client.SendMessage(votingHandler.Channel, sb.ToString());
         }
 

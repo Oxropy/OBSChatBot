@@ -8,9 +8,11 @@ using System.Text.RegularExpressions;
 using TwitchLib.Client;
 using TwitchLib.Client.Models;
 using TwitchLib.Client.Events;
-using System.Threading;
 using Newtonsoft.Json;
 using System.Threading.Tasks;
+using System.Reactive.Subjects;
+using System.Reactive.Linq;
+using System.Threading;
 
 namespace OBSChatBot
 {
@@ -29,21 +31,25 @@ namespace OBSChatBot
             }
 
             var authResponse = AuthenticateLogin(directory, config);
-            if (authResponse != null)
+            if (authResponse is FailedAuthentication failure)
             {
-                if (authResponse is FailedAuthentication failure)
+                Console.WriteLine("Authentication Failure: {0}; Reason: {1}", failure.Failure, failure.Reason);
+                Console.ReadKey();
+                return;
+            }
+
+            if (authResponse is SuccessfulAuthentication success && success.Name == config.user)
+            {
+                var t = new Thread(() => RunBot(directory, success.Name, success.Token, config));
+                t.Start();
+
+                string input;
+                do
                 {
-                    Console.WriteLine("Authentication Failure: {0}; Reason: {1}", failure.Failure, failure.Reason);
-                    Console.ReadKey();
-                    return;
-                }
+                    input = Console.ReadLine();
+                } while (input != "!exit");
 
-                if (authResponse is SuccessfulAuthentication success)
-                {
-                    RunBot(directory, success.Name, success.Token, config.channel);
-
-
-                }
+                t.Abort();
             }
         }
 
@@ -53,7 +59,6 @@ namespace OBSChatBot
 
             if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
 
-            bool newToken = false;
             string accessToken = string.Empty;
             string path = directory + "/Token.txt";
             if (File.Exists(path))
@@ -74,42 +79,78 @@ namespace OBSChatBot
             IAuthenticationResult authResponse;
             if (!string.IsNullOrWhiteSpace(accessToken))
             {
-                authResponse = new SuccessfulAuthentication(user, accessToken);
+                return new SuccessfulAuthentication(user, accessToken);
             }
-            else
-            {
-                var state = TwitchAuthentication.GenerateState();
-                var url = TwitchAuthentication.AuthUri(state, config.clientId, config.redirectHost);
-                Console.WriteLine("Log in URL:");
-                Console.WriteLine(url);
-                var returnedUrl = Console.ReadLine();
 
-                authResponse = TwitchAuthentication.AuthRequest(returnedUrl, state, config.clientId, config.clientSecret, config.redirectUri);
-                newToken = true;
-            }
+            var state = TwitchAuthentication.GenerateState();
+            var url = TwitchAuthentication.AuthUri(state, config.clientId, config.redirectHost);
+            Console.WriteLine("Log in URL:");
+            Console.WriteLine(url);
+            var returnedUrl = Console.ReadLine();
+
+            authResponse = TwitchAuthentication.AuthRequest(returnedUrl, state, config.clientId, config.clientSecret, config.redirectUri);
 
             if (authResponse is SuccessfulAuthentication success)
             {
-                // When new Token add Token
-                if (newToken) File.WriteAllLines(path, new[] { success.Token });
-
+                File.WriteAllLines(path, new[] { success.Token });
                 Console.WriteLine("Authentication Success");
             }
 
             return authResponse;
         }
 
-        private static async Task<bool> RunBot(string directory, string name, string token, string channelName)
+        private static async void RunBot(string directory, string name, string token, Config config)
         {
             var source = new TaskCompletionSource<bool>();
 
+            var obs = await InitObs(config.uri, config.pw);
+            Console.WriteLine("OBS connected to web socket!");
             var client = await InitBot(name, token);
             Console.WriteLine("Connected as '{0}'", name);
-            var channel = await JoinChannel(client, channelName);
-            Console.WriteLine("Joined channel '{0}'", channelName);
+            var channel = await JoinChannel(client, config.channel);
+            Console.WriteLine("Joined channel '{0}'", config.channel);
+
+            var votings = InitVotings(directory, client, obs, config);
             client.SendMessage(channel, "Voting is active!");
 
-            return true;
+            try
+            {
+                var messages = MessageStream(client);
+                var commands = messages.Where(m => m.Message.StartsWith("!")).Select(m => new Tuple<bool, string, string[]>(m.IsModerator, m.Username, m.Message.Substring(1).Split(' ')));
+
+                await commands.ForEachAsync(c => votings.ProcessMessage(c));
+            }
+            catch (ThreadAbortException)
+            {
+                client.LeaveChannel(channel);
+                client.Disconnect();
+            }
+        }
+
+        private static IObservable<ChatMessage> MessageStream(TwitchClient client)
+        {
+            var subject = new Subject<ChatMessage>();
+
+            client.OnMessageReceived += (sender, args) => { subject.OnNext(args.ChatMessage); };
+
+            return subject.AsObservable();
+        }
+
+        private static Task<OBSWebsocket> InitObs(string obsUri, string obsPw)
+        {
+            var source = new TaskCompletionSource<OBSWebsocket>();
+            var obs = new OBSWebsocket();
+
+            void ObsConnected(object sender, EventArgs e)
+            {
+                obs.Connected -= ObsConnected;
+                source.SetResult(obs);
+            }
+
+            obs.Connected += ObsConnected;
+            obs.Connect(obsUri, obsPw);
+
+            return source.Task;
         }
 
         private static Task<TwitchClient> InitBot(string name, string token)
@@ -148,66 +189,22 @@ namespace OBSChatBot
             return source.Task;
         }
 
-        private static void TextHandling(string directory, TwitchClient client, Config config)
+        private static VotingHandler InitVotings(string directory, TwitchClient client, OBSWebsocket obs, Config config)
         {
-            string channel = config.channel;
-            int milliseconds = config.time;
-            string uri = config.uri;
-            string pw = config.pw;
-            string scenesRegex = config.scene;
-
-            var obs = new OBSWebsocket();
-            obs.Connect(uri, pw);
-
-            VotingHandler votings = new VotingHandler(client, channel, obs, milliseconds);
+            VotingHandler votings = new VotingHandler(client, obs, config.channel, config.time);
             // Add Scene voting
             string action = "scene";
-            Regex reg = new Regex(scenesRegex);
+            Regex reg = new Regex(config.scene);
             List<OBSScene> scenes = obs.ListScenes();
             string[] choices = scenes.Where(s => reg.IsMatch(s.Name)).Select(s => s.Name).ToArray();
 
             var afterVote = new Action<OBSWebsocket, IEnumerable<Tuple<string, int>>>(ChangeObsScene);
-            Voting sceneVote = new Voting(action, choices, milliseconds, afterVote);
+            Voting sceneVote = new Voting(action, choices, config.time, afterVote);
             votings.AddVoting(sceneVote);
 
             SetVotingsFromFile(directory, votings);
 
-            string input;
-            // Console commands
-            bool exit = false;
-            while (!exit)
-            {
-                input = Console.ReadLine();
-                exit = input == "!exit";
-
-                if (input.StartsWith("!info"))
-                {
-                    string[] info = input.Split(' ');
-
-                    if (info.Length == 2)
-                    {
-                        Voting vote = votings.GetVotingInfo(info[1]);
-                        client.SendMessage(channel, string.Format("Action: {0}, Choices: {1}", vote.ActionName, string.Join(" | ", vote.Votes.Keys)));
-                    }
-                }
-                else if (input == "!addVoting")
-                {
-                    // Configure vote
-                    Console.WriteLine("Voting action:");
-                    action = Console.ReadLine();
-
-                    Console.WriteLine("Choices, seperate by '|':");
-                    choices = Console.ReadLine().Split('|');
-
-                    milliseconds = GetVotetime();
-
-                    Voting voting = new Voting(action, choices, milliseconds);
-                    votings.AddVoting(voting);
-                }
-            }
-
-            client.LeaveChannel(channel);
-            client.Disconnect();
+            return votings;
         }
 
         private static Config SetConfigFromFile(string directory)

@@ -16,15 +16,12 @@ namespace OBSChatBot.Authentication
 
         public static string AuthUri(string state, string clientId, string redirectHost)
         {
-            const string scope = "chat_login+user_read";
-
             var query = HttpUtility.ParseQueryString(string.Empty);
             query.Add("client_id", clientId);
             query.Add("redirect_uri", redirectHost);
             query.Add("response_type", "code");
-            query.Add("scope", scope);
+            query.Add("scope", "chat_login+user_read");
             query.Add("state", state);
-
             return $"https://api.twitch.tv/kraken/oauth2/authorize?{query}";
         }
 
