@@ -43,11 +43,7 @@ namespace OBSChatBot
 
         public void ResetVotes()
         {
-            Votes = new Dictionary<string, int>();
-            foreach (var choice in Choices)
-            {
-                Votes.Add(choice.Key, 0);
-            }
+            Votes = Choices.ToDictionary(c => c.Key, c => 0);
         }
 
         public IEnumerable<Tuple<string, int>> GetResult()
@@ -130,22 +126,17 @@ namespace OBSChatBot
             voting.ResetVotes();
         }
 
-        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0)
+        public void AddVoting(string action, IEnumerable<string> choices, int milliseconds = 0, Action<OBSWebsocket, IEnumerable<Tuple<string, int>>> afterVote = null)
         {
-            Voting voting = new Voting(action, choices, milliseconds);
-            AddVoting(voting);
-        }
-
-        public void AddVoting(Voting voting)
-        {
-            string action = voting.ActionName.ToLower();
-            if (Votings.ContainsKey(action))
+            string actionLower = action.ToLower();
+            if (Votings.ContainsKey(actionLower))
             {
                 Client.SendMessage(Channel, string.Format("Voting '{0}' exists already!", action));
                 return;
             }
 
-            if (voting.Milliseconds == 0) voting.Milliseconds = DefaultMilliseconds;
+            if (milliseconds == 0) milliseconds = DefaultMilliseconds;
+            Voting voting = new Voting(action, choices, milliseconds, afterVote);
             Votings.Add(action, voting);
         }
 
@@ -243,8 +234,7 @@ namespace OBSChatBot
 
         public static void AddVoting(VotingHandler votingHandler, string action, string[] choices, int milliseconds)
         {
-            Voting voting = new Voting(action, choices, milliseconds);
-            votingHandler.AddVoting(voting);
+            votingHandler.AddVoting(action, choices, milliseconds);
         }
 
         public static void EditVotetime(VotingHandler votingHandler, string action, int milliseconds)

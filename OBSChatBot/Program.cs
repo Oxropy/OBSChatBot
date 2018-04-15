@@ -30,17 +30,10 @@ namespace OBSChatBot
                 return;
             }
 
-            var authResponse = AuthenticateLogin(directory, config);
-            if (authResponse is FailedAuthentication failure)
+            var token = GetAuthenticationToken(directory, config).Result;
+            if (!string.IsNullOrWhiteSpace(token))
             {
-                Console.WriteLine("Authentication Failure: {0}; Reason: {1}", failure.Failure, failure.Reason);
-                Console.ReadKey();
-                return;
-            }
-
-            if (authResponse is SuccessfulAuthentication success && success.Name == config.user)
-            {
-                var t = new Thread(() => RunBot(directory, success.Name, success.Token, config));
+                var t = new Thread(() => RunBot(directory, token, config));
                 t.Start();
 
                 string input;
@@ -53,14 +46,31 @@ namespace OBSChatBot
             }
         }
 
-        private static IAuthenticationResult AuthenticateLogin(string directory, Config config)
+        private static async Task<string> GetAuthenticationToken(string directory, Config config)
         {
-            string user = config.user;
+            var authResponse = await AuthenticateLogin(directory, config);
+            if (authResponse is FailedAuthentication failure)
+            {
+                Console.WriteLine("Authentication Failure: {0}; Reason: {1}", failure.Failure, failure.Reason);
+                Console.ReadKey();
+                return string.Empty;
+            }
+
+            if (authResponse is SuccessfulAuthentication success && success.Name == config.user)
+            {
+                return success.Token;
+            }
+            return null;
+        }
+
+        private static Task<IAuthenticationResult> AuthenticateLogin(string directory, Config config)
+        {
+            var source = new TaskCompletionSource<IAuthenticationResult>();
 
             if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
 
             string accessToken = string.Empty;
-            string path = directory + "/Token.txt";
+            string path = Path.Combine(directory, "Token.txt");
             if (File.Exists(path))
             {
                 try
@@ -76,12 +86,13 @@ namespace OBSChatBot
                 }
             }
 
-            IAuthenticationResult authResponse;
             if (!string.IsNullOrWhiteSpace(accessToken))
             {
-                return new SuccessfulAuthentication(user, accessToken);
+                source.SetResult(new SuccessfulAuthentication(config.user, accessToken));
+                return source.Task;
             }
 
+            IAuthenticationResult authResponse;
             var state = TwitchAuthentication.GenerateState();
             var url = TwitchAuthentication.AuthUri(state, config.clientId, config.redirectHost);
             Console.WriteLine("Log in URL:");
@@ -96,17 +107,18 @@ namespace OBSChatBot
                 Console.WriteLine("Authentication Success");
             }
 
-            return authResponse;
+            source.SetResult(authResponse);
+            return source.Task;
         }
 
-        private static async void RunBot(string directory, string name, string token, Config config)
+        private static async void RunBot(string directory, string token, Config config)
         {
             var source = new TaskCompletionSource<bool>();
 
             var obs = await InitObs(config.uri, config.pw);
             Console.WriteLine("OBS connected to web socket!");
-            var client = await InitBot(name, token);
-            Console.WriteLine("Connected as '{0}'", name);
+            var client = await InitBot(config.channel, token);
+            Console.WriteLine("Connected as '{0}'", config.channel);
             var channel = await JoinChannel(client, config.channel);
             Console.WriteLine("Joined channel '{0}'", config.channel);
 
@@ -199,8 +211,7 @@ namespace OBSChatBot
             string[] choices = scenes.Where(s => reg.IsMatch(s.Name)).Select(s => s.Name).ToArray();
 
             var afterVote = new Action<OBSWebsocket, IEnumerable<Tuple<string, int>>>(ChangeObsScene);
-            Voting sceneVote = new Voting(action, choices, config.time, afterVote);
-            votings.AddVoting(sceneVote);
+            votings.AddVoting(action, choices, config.time, afterVote);
 
             SetVotingsFromFile(directory, votings);
 
@@ -211,7 +222,7 @@ namespace OBSChatBot
         {
             Config config = new Config();
 
-            string path = directory + "/config.json";
+            string path = Path.Combine(directory, "config.json");
             if (File.Exists(path))
             {
                 try
@@ -251,7 +262,7 @@ namespace OBSChatBot
 
         private static void SetVotingsFromFile(string directory, VotingHandler votingHandler)
         {
-            string path = directory + "/votings.json";
+            string path = Path.Combine(directory, "votings.json");
             if (File.Exists(path))
             {
                 try
