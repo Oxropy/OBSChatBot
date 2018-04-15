@@ -83,30 +83,30 @@ namespace OBSChatBot
 
             switch (parts[0])
             {
-                case "!info": // List of commands
+                case "info": // List of commands
                     ChatCommands.Info (this);
                     break;
-                case "!voteInfo": // Info for voting
+                case "voteInfo": // Info for voting
                     if (parts.Length != 2) return;
                     ChatCommands.VoteInfo(this, parts[1]);
                     break;
-                case "!vote": // Vote for existing voting
+                case "vote": // Vote for existing voting
                     if (parts.Length != 3) return;
                     ChatCommands.Vote(this, user, parts[1], parts[2]);
                     break;
-                case "!addVoting": // Create new voting
+                case "addVoting": // Create new voting
                     if (parts.Length != 4 || !isMod || !int.TryParse(parts[3], out int milliseconds)) return;
                     ChatCommands.AddVoting(this, parts[1], parts[2].Split('|'), milliseconds);
                     break;
-                case "!editVoteTime": // Change time for voting
+                case "editVoteTime": // Change time for voting
                     if (parts.Length != 2 || !isMod || !int.TryParse(parts[3], out milliseconds)) return;
                     ChatCommands.EditVotetime(this, parts[1], milliseconds);
                     break;
-                case "!deleteVoting": // Remove voting
+                case "deleteVoting": // Remove voting
                     if (parts.Length != 2 || !isMod) return;
                     ChatCommands.DeleteVoting(this, parts[1]);
                     break;
-                case "!votings": // Existing votings
+                case "votings": // Existing votings
                     ChatCommands.Votings(this);
                     break;
             }
