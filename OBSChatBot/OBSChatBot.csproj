@@ -124,8 +124,8 @@
     </Reference>
     <Reference Include="System.Web" />
     <Reference Include="System.Windows" />
-    <Reference Include="TwitchLib.Client, Version=2.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\TwitchLib.Client.2.0.0\lib\net452\TwitchLib.Client.dll</HintPath>
+    <Reference Include="TwitchLib.Client, Version=2.1.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\TwitchLib.Client.2.1.0\lib\net452\TwitchLib.Client.dll</HintPath>
     </Reference>
     <Reference Include="websocket-sharp, Version=1.0.2.59611, Culture=neutral, PublicKeyToken=5660b08a1845a91e, processorArchitecture=MSIL">
       <HintPath>..\packages\WebSocketSharp.1.0.3-rc11\lib\websocket-sharp.dll</HintPath>

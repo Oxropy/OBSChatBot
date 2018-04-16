@@ -13,6 +13,10 @@ using System.Threading.Tasks;
 using System.Reactive.Subjects;
 using System.Reactive.Linq;
 using System.Threading;
+using TwitchLib.Client.Services;
+using TwitchLib.Client.Interfaces;
+using TwitchLib.Client.Enums;
+using WebSocketSharp;
 
 namespace OBSChatBot
 {
@@ -21,6 +25,13 @@ namespace OBSChatBot
         static void Main(string[] args)
         {
             string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
+            if (!Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+                Console.WriteLine("Path:");
+                Console.WriteLine(directory);
+                Console.ReadKey();
+            }
             var config = SetConfigFromFile(directory);
 
             if (string.IsNullOrWhiteSpace(config.user) || string.IsNullOrWhiteSpace(config.channel) || string.IsNullOrWhiteSpace(config.uri))
@@ -30,45 +41,11 @@ namespace OBSChatBot
                 return;
             }
 
-            var token = GetAuthenticationToken(directory, config).Result;
-            if (!string.IsNullOrWhiteSpace(token))
-            {
-                var t = new Thread(() => RunBot(directory, token, config));
-                t.Start();
-
-                string input;
-                do
-                {
-                    input = Console.ReadLine();
-                } while (input != "!exit");
-
-                t.Abort();
-            }
+            StartBot(directory, config);
         }
 
-        private static async Task<string> GetAuthenticationToken(string directory, Config config)
+        private static async void StartBot(string directory, Config config)
         {
-            var authResponse = await AuthenticateLogin(directory, config);
-            if (authResponse is FailedAuthentication failure)
-            {
-                Console.WriteLine("Authentication Failure: {0}; Reason: {1}", failure.Failure, failure.Reason);
-                Console.ReadKey();
-                return string.Empty;
-            }
-
-            if (authResponse is SuccessfulAuthentication success && success.Name == config.user)
-            {
-                return success.Token;
-            }
-            return null;
-        }
-
-        private static Task<IAuthenticationResult> AuthenticateLogin(string directory, Config config)
-        {
-            var source = new TaskCompletionSource<IAuthenticationResult>();
-
-            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-
             string accessToken = string.Empty;
             string path = Path.Combine(directory, "Token.txt");
             if (File.Exists(path))
@@ -86,32 +63,23 @@ namespace OBSChatBot
                 }
             }
 
+            IAuthenticationResult result;
             if (!string.IsNullOrWhiteSpace(accessToken))
             {
-                source.SetResult(new SuccessfulAuthentication(config.user, accessToken));
-                return source.Task;
+                result = new SuccessfulAuthentication(config.user, accessToken);
             }
-
-            IAuthenticationResult authResponse;
-            var state = TwitchAuthentication.GenerateState();
-            var url = TwitchAuthentication.AuthUri(state, config.clientId, config.redirectHost);
-            Console.WriteLine("Log in URL:");
-            Console.WriteLine(url);
-            var returnedUrl = Console.ReadLine();
-
-            authResponse = TwitchAuthentication.AuthRequest(returnedUrl, state, config.clientId, config.clientSecret, config.redirectUri);
-
-            if (authResponse is SuccessfulAuthentication success)
+            else
             {
-                File.WriteAllLines(path, new[] { success.Token });
-                Console.WriteLine("Authentication Success");
+                result = await TwitchAuthentication.Auth(config.clientId, config.clientSecret, config.redirectUri);
             }
 
-            source.SetResult(authResponse);
-            return source.Task;
+            if (result is SuccessfulAuthentication success)
+            {
+                await RunBot(success.Name, success.Token, config);
+            }
         }
 
-        private static async void RunBot(string directory, string token, Config config)
+        private static async Task RunBot(string directory, string token, Config config)
         {
             var source = new TaskCompletionSource<bool>();
 
@@ -128,9 +96,28 @@ namespace OBSChatBot
             try
             {
                 var messages = MessageStream(client);
-                var commands = messages.Where(m => m.Message.StartsWith("!")).Select(m => new Tuple<bool, string, string[]>(m.IsModerator, m.Username, m.Message.Substring(1).Split(' ')));
+                var commands = messages.Where(m => m.Message.StartsWith("!")).Select(Command.Parse);
 
-                await commands.ForEachAsync(c => votings.ProcessMessage(c));
+                await commands.ForEachAsync(c =>
+                {
+                    if (c.Is("exit"))
+                    {
+                        if (c.IsSender(UserType.Moderator))
+                        {
+                            QuitBot(client, channel);
+                        }
+                        else
+                        {
+                            Whisper(client, c.Message.Username, "You are not an admin!");
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("Command: {0} -> {1}", c.Name, string.Join(", ", c.Args));
+                    }
+                });
+
+                await commands.ForEachAsync(c => votings.ProcessMessage(new Tuple<bool, string, string[]>(c.Message.IsModerator, c.Message.Username, c.Args)));
             }
             catch (ThreadAbortException)
             {
@@ -143,9 +130,69 @@ namespace OBSChatBot
         {
             var subject = new Subject<ChatMessage>();
 
-            client.OnMessageReceived += (sender, args) => { subject.OnNext(args.ChatMessage); };
+            void OnMessage(object sender, OnMessageReceivedArgs args)
+            {
+                subject.OnNext(args.ChatMessage);
+            }
+
+            void OnDisconnect(object sender, OnDisconnectedArgs args)
+            {
+                client.OnMessageReceived -= OnMessage;
+                client.OnDisconnected -= OnDisconnect;
+                subject.OnCompleted();
+            }
+
+            client.OnMessageReceived += OnMessage;
+            client.OnDisconnected += OnDisconnect;
 
             return subject.AsObservable();
+        }
+
+        private static Task Whisper(ITwitchClient client, string receiver, string message)
+        {
+            var source = new TaskCompletionSource<bool>();
+
+            void EventHandler(object a, OnWhisperSentArgs args)
+            {
+                if (args.Message == message && args.Receiver == receiver)
+                {
+                    client.OnWhisperSent -= EventHandler;
+                    source.SetResult(true);
+                }
+            }
+
+            client.OnWhisperSent += EventHandler;
+            client.SendWhisper(receiver, message);
+            Thread.Sleep(1000);
+
+            return source.Task;
+        }
+
+        private static async void QuitBot(ITwitchClient client, JoinedChannel channel)
+        {
+            await SendMessage(client, channel, "Bye bye!");
+            await LeaveChannel(client, channel);
+        }
+
+        private static Task<SentMessage> SendMessage(ITwitchClient client, JoinedChannel channel, string message)
+        {
+            var source = new TaskCompletionSource<SentMessage>();
+
+            void EventHandler(object a, OnMessageSentArgs args)
+            {
+                var sent = args.SentMessage;
+                if (sent.Message == message && sent.Channel == channel.Channel)
+                {
+                    client.OnMessageSent -= EventHandler;
+                    source.SetResult(sent);
+                }
+            }
+
+            client.OnMessageSent += EventHandler;
+            client.SendMessage(channel, message);
+            Thread.Sleep(1000);
+
+            return source.Task;
         }
 
         private static Task<OBSWebsocket> InitObs(string obsUri, string obsPw)
@@ -170,6 +217,22 @@ namespace OBSChatBot
             var source = new TaskCompletionSource<TwitchClient>();
             var client = new TwitchClient();
 
+            var throttle = new MessageThrottler(client, 20, TimeSpan.FromSeconds(30), applyThrottlingToRawMessages: true);
+            client.ChatThrottler = throttle;
+            client.WhisperThrottler = throttle;
+            throttle.StartQueue();
+
+            client.OnConnectionError += (sender, args) =>
+            {
+                Console.WriteLine("ERROR: user: {0} error: {1}", args.BotUsername, args.Error.Message);
+                Console.WriteLine(args.Error.Exception.ToString());
+            };
+
+            client.OnUnaccountedFor += (sender, args) =>
+            {
+                Console.WriteLine("LIB ERROR: channel: {0} location: {1} raw: {2}", args.Channel, args.Location, args.RawIRC);
+            };
+
             void Client_OnConnected(object sender, OnConnectedArgs e)
             {
                 client.OnConnected -= Client_OnConnected;
@@ -183,7 +246,7 @@ namespace OBSChatBot
             return source.Task;
         }
 
-        private static Task<JoinedChannel> JoinChannel(TwitchClient client, string channel)
+        private static Task<JoinedChannel> JoinChannel(ITwitchClient client, string channel)
         {
             var source = new TaskCompletionSource<JoinedChannel>();
 
@@ -198,6 +261,24 @@ namespace OBSChatBot
 
             client.OnJoinedChannel += Client_OnJoinedChannel;
             client.JoinChannel(channel);
+            return source.Task;
+        }
+
+        private static Task LeaveChannel(ITwitchClient client, JoinedChannel channel)
+        {
+            var source = new TaskCompletionSource<bool>();
+
+            void Handler(object a, OnLeftChannelArgs args)
+            {
+                if (args.Channel == channel.Channel)
+                {
+                    client.OnLeftChannel -= Handler;
+                    source.SetResult(true);
+                }
+            }
+
+            client.OnLeftChannel += Handler;
+            client.LeaveChannel(channel);
             return source.Task;
         }
 
@@ -313,6 +394,41 @@ namespace OBSChatBot
         {
             var winner = result.ToArray()[0];
             obs.SetCurrentScene(winner.Item1);
+        }
+
+        private struct Command
+        {
+            public readonly ChatMessage Message;
+            public readonly string Name;
+            public readonly string[] Args;
+            
+            public Command(ChatMessage message, string name, string[] args)
+            {
+                Message = message;
+                Name = name;
+                Args = args;
+            }
+
+            public bool Is(string name)
+            {
+                return Name.Equals(name.ToLowerInvariant());
+            }
+
+            public bool IsSender(UserType type)
+            {
+                return Message.UserType >= type;
+            }
+
+            public static Command Parse(ChatMessage message, string commandLine)
+            {
+                var parts = commandLine.Substring(1).Split(' ');
+                return new Command(message, parts[0].ToLowerInvariant(), parts.SubArray(1, parts.Length - 1));
+            }
+
+            public static Command Parse(ChatMessage message)
+            {
+                return Parse(message, message.Message);
+            }
         }
     }
 }

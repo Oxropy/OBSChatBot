@@ -3,6 +3,7 @@ using RestSharp.Authenticators;
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Threading.Tasks;
 using System.Web;
 
 namespace OBSChatBot.Authentication
@@ -25,11 +26,32 @@ namespace OBSChatBot.Authentication
             return $"https://api.twitch.tv/kraken/oauth2/authorize?{query}";
         }
 
-        public static IAuthenticationResult AuthRequest(string returnedUrl, string expectedState, string clientId, string clientSecret, string redirectUri)
+        public static async Task<IAuthenticationResult> Auth(string clientId, string clientSecret, string returnUrl)
         {
-            if (returnedUrl.Contains("?")) returnedUrl = returnedUrl.Substring(returnedUrl.IndexOf('?') + 1);
-        
-            var args = HttpUtility.ParseQueryString(returnedUrl);
+            var state = GenerateState();
+            var authUrl = AuthUri(state, clientId, returnUrl);
+            Console.WriteLine("url={0}", authUrl);
+
+            var httpListener = new HttpListener();
+            httpListener.Prefixes.Add(new Uri(new Uri(returnUrl), "/").ToString());
+            httpListener.Start();
+            var ctx = await httpListener.GetContextAsync();
+            var req = ctx.Request;
+            var returnedUrl = req.Url;
+
+            var res = ctx.Response;
+            res.StatusCode = 201;
+            res.ContentLength64 = 0;
+            res.OutputStream.Close();
+
+            httpListener.Close();
+
+            return await AuthRequest(returnedUrl, state, clientId, clientSecret, returnUrl);
+        }
+
+        private static async Task<IAuthenticationResult> AuthRequest(Uri returnedUrl, string expectedState, string clientId, string clientSecret, string redirectUri)
+        {
+            var args = HttpUtility.ParseQueryString(returnedUrl.Query);
             if (args["state"] == expectedState)
             {
                 try
@@ -52,7 +74,7 @@ namespace OBSChatBot.Authentication
                         client.Authenticator = new OAuth2AuthorizationRequestHeaderAuthenticator(response.Data.access_token);
                         requestUser.AddHeader("Client-ID", clientId);
 
-                        var responseUser = client.Execute<TwitchUserResponse>(requestUser);
+                        var responseUser = await client.ExecuteTaskAsync<TwitchUserResponse>(requestUser);
                         if (response.StatusCode == HttpStatusCode.OK)
                         {
                             return new SuccessfulAuthentication(responseUser.Data.name, response.Data.access_token);
