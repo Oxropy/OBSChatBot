@@ -3,6 +3,7 @@ using RestSharp.Authenticators;
 using System;
 using System.Collections.Generic;
 using System.Net;
+using System.Text;
 using System.Threading.Tasks;
 using System.Web;
 
@@ -30,7 +31,7 @@ namespace OBSChatBot.Authentication
         {
             var state = GenerateState();
             var authUrl = AuthUri(state, clientId, returnUrl);
-            Console.WriteLine("url={0}", authUrl);
+            Console.WriteLine("url: {0}", authUrl);
 
             var httpListener = new HttpListener();
             httpListener.Prefixes.Add(new Uri(new Uri(returnUrl), "/").ToString());
@@ -39,9 +40,13 @@ namespace OBSChatBot.Authentication
             var req = ctx.Request;
             var returnedUrl = req.Url;
 
+            var responseText = "Close Me!<script>window.open('', '_self').close()</script>";
+            var responseData = Encoding.UTF8.GetBytes(responseText);
             var res = ctx.Response;
             res.StatusCode = 201;
-            res.ContentLength64 = 0;
+            res.ContentLength64 = responseData.Length;
+            res.ContentType = "text/html";
+            await res.OutputStream.WriteAsync(responseData, 0, responseData.Length);
             res.OutputStream.Close();
 
             httpListener.Close();
