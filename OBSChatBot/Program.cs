@@ -127,7 +127,7 @@ namespace OBSChatBot
             await LeaveChannel(client, channel);
         }
 
-        private static IObservable<ChatMessage> MessageStream(TwitchClient client)
+        private static IObservable<ChatMessage> MessageStream(ITwitchClient client)
         {
             var subject = new Subject<ChatMessage>();
 
@@ -275,7 +275,7 @@ namespace OBSChatBot
             return source.Task;
         }
 
-        private static VotingHandler InitVotings(string directory, TwitchClient client, OBSWebsocket obs, Config config)
+        private static VotingHandler InitVotings(string directory, ITwitchClient client, OBSWebsocket obs, Config config)
         {
             VotingHandler votings = new VotingHandler(client, obs, config.channel, config.time);
             // Add Scene voting

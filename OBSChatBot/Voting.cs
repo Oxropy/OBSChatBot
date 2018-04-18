@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using TwitchLib.Client;
+using TwitchLib.Client.Interfaces;
 
 namespace OBSChatBot
 {
@@ -54,7 +55,7 @@ namespace OBSChatBot
 
     public class VotingHandler
     {
-        public readonly TwitchClient Client;
+        public readonly ITwitchClient Client;
         public readonly string Channel;
         public readonly int DefaultMilliseconds;
         public readonly Dictionary<string, Voting> Votings;
@@ -62,7 +63,7 @@ namespace OBSChatBot
 
         private static Voting emptyVoting = new Voting("", new string[0], 0);
 
-        public VotingHandler(TwitchClient client, OBSWebsocket obs, string channel, int defaultMilliseconds)
+        public VotingHandler(ITwitchClient client, OBSWebsocket obs, string channel, int defaultMilliseconds)
         {
             Client = client;
             Obs = obs;
@@ -77,33 +78,33 @@ namespace OBSChatBot
             string user = message.Item2;
             string[] parts = message.Item3;
 
-            switch (parts[0])
+            switch (parts[0].ToLower())
             {
                 case "info": // List of commands
-                    ChatCommands.Info (this);
+                    InfoCommand();
                     break;
-                case "voteInfo": // Info for voting
+                case "voteinfo": // Info for voting
                     if (parts.Length != 2) return;
-                    ChatCommands.VoteInfo(this, parts[1]);
+                    VoteInfoCommand(parts[1]);
                     break;
                 case "vote": // Vote for existing voting
                     if (parts.Length != 3) return;
-                    ChatCommands.Vote(this, user, parts[1], parts[2]);
+                    VoteCommand(user, parts[1], parts[2]);
                     break;
-                case "addVoting": // Create new voting
+                case "addvoting": // Create new voting
                     if (parts.Length != 4 || !isMod || !int.TryParse(parts[3], out int milliseconds)) return;
-                    ChatCommands.AddVoting(this, parts[1], parts[2].Split('|'), milliseconds);
+                    AddVotingCommand(parts[1], parts[2].Split('|'), milliseconds);
                     break;
-                case "editVoteTime": // Change time for voting
+                case "editvotetime": // Change time for voting
                     if (parts.Length != 2 || !isMod || !int.TryParse(parts[3], out milliseconds)) return;
-                    ChatCommands.EditVotetime(this, parts[1], milliseconds);
+                    EditVotetimeCommand(parts[1], milliseconds);
                     break;
-                case "deleteVoting": // Remove voting
+                case "deletevoting": // Remove voting
                     if (parts.Length != 2 || !isMod) return;
-                    ChatCommands.DeleteVoting(this, parts[1]);
+                    RemoveVoting(parts[1]);
                     break;
                 case "votings": // Existing votings
-                    ChatCommands.Votings(this);
+                    VotingsCommand();
                     break;
             }
         }
@@ -199,11 +200,8 @@ namespace OBSChatBot
             sb.Append(resultValue.Item2);
             sb.Append(")");
         }
-    }
-
-    public static class ChatCommands
-    {
-        public static void Info(VotingHandler votingHandler)
+    
+        public void InfoCommand()
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("!votings: Existing votings | ");
@@ -212,48 +210,42 @@ namespace OBSChatBot
             sb.Append("!addVoting [Mod]: Create new voting | ");
             sb.Append("!editVoteTime [Mod]: Change time for voting | ");
             sb.Append("!deleteVoting [Mod]: Remove voting");
-            votingHandler.Client.SendMessage(votingHandler.Channel, sb.ToString());
+            Client.SendMessage(Channel, sb.ToString());
         }
 
-        public static void VoteInfo(VotingHandler votingHandler, string action)
+        public void VoteInfoCommand(string action)
         {
-            Voting vote = votingHandler.GetVotingInfo(action);
-            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Action: {0}, Choices: {1}, Vote time: {2} sec", vote.ActionName, string.Join(" | ", vote.Choices.Values), vote.Milliseconds / 1000));
+            Voting vote = GetVotingInfo(action);
+            Client.SendMessage(Channel, string.Format("Action: {0}, Choices: {1}, Vote time: {2} sec", vote.ActionName, string.Join(" | ", vote.Choices.Values), vote.Milliseconds / 1000));
         }
 
-        public static void Vote(VotingHandler votingHandler, string user, string action, string choice)
+        public void VoteCommand(string user, string action, string choice)
         {
-            if (!votingHandler.Votings.ContainsKey(action)) return;
+            if (!Votings.ContainsKey(action)) return;
 
-            Voting voting = votingHandler.Votings[action];
-            if (!voting.IsActive) votingHandler.DoVoting(voting);
+            Voting voting = Votings[action];
+            if (!voting.IsActive) DoVoting(voting);
 
-            var vote = new Tuple<string, string>(user, choice);
-            votingHandler.AddVote(voting, vote);
+            AddVote(voting, new Tuple<string, string>(user, choice));
         }
 
-        public static void AddVoting(VotingHandler votingHandler, string action, string[] choices, int milliseconds)
+        public void AddVotingCommand(string action, string[] choices, int milliseconds)
         {
-            votingHandler.AddVoting(action, choices, milliseconds);
+            AddVoting(action, choices, milliseconds);
         }
 
-        public static void EditVotetime(VotingHandler votingHandler, string action, int milliseconds)
+        public void EditVotetimeCommand(string action, int milliseconds)
         {
-            if (!votingHandler.Votings.ContainsKey(action)) return;
+            if (!Votings.ContainsKey(action)) return;
 
-            Voting voting = votingHandler.Votings[action];
+            Voting voting = Votings[action];
             voting.Milliseconds = milliseconds;
-            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Votetime for action '{0}' set to {1} sec", action, milliseconds / 1000));
+            Client.SendMessage(Channel, string.Format("Votetime for action '{0}' set to {1} sec", action, milliseconds / 1000));
         }
 
-        public static void DeleteVoting(VotingHandler votingHandler, string action)
+        public void VotingsCommand()
         {
-            votingHandler.RemoveVoting(action);
-        }
-
-        public static void Votings(VotingHandler votingHandler)
-        {
-            votingHandler.Client.SendMessage(votingHandler.Channel, string.Format("Existing votings: {0}", string.Join(" | ", votingHandler.Votings.Keys.ToArray())));
+            Client.SendMessage(Channel, string.Format("Existing votings: {0}", string.Join(" | ", Votings.Keys.ToArray())));
         }
     }
 }
