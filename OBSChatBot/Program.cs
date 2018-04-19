@@ -23,24 +23,32 @@ namespace OBSChatBot
     {
         static void Main(string[] args)
         {
-            string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
-            if (!Directory.Exists(directory))
+            try
             {
-                Directory.CreateDirectory(directory);
-                Console.WriteLine("Path:");
-                Console.WriteLine(directory);
+                string directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "OBSChatBot").ToString();
+                if (!Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                    Console.WriteLine("Path:");
+                    Console.WriteLine(directory);
+                    Console.ReadKey();
+                }
+
+                var config = SetConfigFromFile(directory);
+                if (string.IsNullOrWhiteSpace(config.user) || string.IsNullOrWhiteSpace(config.channel) || string.IsNullOrWhiteSpace(config.uri))
+                {
+                    Console.WriteLine("Config missing values!");
+                    Console.ReadKey();
+                    return;
+                }
+
+                StartBot(directory, config);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error: {0}", ex);
                 Console.ReadKey();
             }
-
-            var config = SetConfigFromFile(directory);
-            if (string.IsNullOrWhiteSpace(config.user) || string.IsNullOrWhiteSpace(config.channel) || string.IsNullOrWhiteSpace(config.uri))
-            {
-                Console.WriteLine("Config missing values!");
-                Console.ReadKey();
-                return;
-            }
-
-            StartBot(directory, config);
         }
 
         private static async void StartBot(string directory, Config config)
@@ -90,11 +98,11 @@ namespace OBSChatBot
         {
             var source = new TaskCompletionSource<bool>();
 
-            var obs = await InitObs(config.uri, config.pw);
             var client = await InitBot(config.channel, token);
             var channel = await JoinChannel(client, config.channel);
             Console.WriteLine("Connected as : '{0}' and joined channel '{1}'", config.user, config.channel);
 
+            var obs = await InitObs(config.uri, config.pw);
             var votings = InitVotings(directory, client, obs, config);
             client.SendMessage(channel, "Voting is active!");
 

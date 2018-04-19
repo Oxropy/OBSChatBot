@@ -36,7 +36,8 @@ namespace OBSChatBot.Authentication
             var httpListener = new HttpListener();
             httpListener.Prefixes.Add(new Uri(new Uri(returnUrl), "/").ToString());
             httpListener.Start();
-            var ctx = await httpListener.GetContextAsync();
+            //var ctx = await httpListener.GetContextAsync();
+            var ctx = httpListener.GetContext();
             var req = ctx.Request;
             var returnedUrl = req.Url;
 
@@ -79,7 +80,8 @@ namespace OBSChatBot.Authentication
                         client.Authenticator = new OAuth2AuthorizationRequestHeaderAuthenticator(response.Data.access_token);
                         requestUser.AddHeader("Client-ID", clientId);
 
-                        var responseUser = await client.ExecuteTaskAsync<TwitchUserResponse>(requestUser);
+                        //var responseUser = await client.ExecuteTaskAsync<TwitchUserResponse>(requestUser);
+                        var responseUser = client.Execute<TwitchUserResponse>(requestUser);
                         if (response.StatusCode == HttpStatusCode.OK)
                         {
                             return new SuccessfulAuthentication(responseUser.Data.name, response.Data.access_token);
