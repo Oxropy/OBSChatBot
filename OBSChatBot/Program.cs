@@ -61,10 +61,14 @@ namespace OBSChatBot
                 {   // Open the text file using a stream reader.
                     using (StreamReader sr = new StreamReader(path))
                     {
-                        string[] items = sr.ReadLine().Split('|');
-                        if (items.Length == 2 && items[0] == config.user)
+                        string line = sr.ReadLine();
+                        if (!string.IsNullOrWhiteSpace(line))
                         {
-                            accessToken = items[1];
+                            string[] items = line.Split('|');
+                            if (items.Length == 2 && items[0] == config.user)
+                            {
+                                accessToken = items[1];
+                            } 
                         }
                     }
                 }
