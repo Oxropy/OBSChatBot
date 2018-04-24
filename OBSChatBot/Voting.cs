@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using TwitchLib.Client;
 using TwitchLib.Client.Interfaces;
 
 namespace OBSChatBot
@@ -72,35 +71,36 @@ namespace OBSChatBot
             Votings = new Dictionary<string, Voting>();
         }
 
-        public void ProcessMessage(Tuple<bool, string, string[]> message)
+        public void ProcessMessage(Tuple<bool, string, string, string[]> message)
         {
             bool isMod = message.Item1;
             string user = message.Item2;
-            string[] parts = message.Item3;
+            string command = message.Item3;
+            string[] parts = message.Item4;
 
-            switch (parts[0].ToLower())
+            switch (command.ToLower())
             {
                 case "info": // List of commands
                     InfoCommand();
                     break;
                 case "voteinfo": // Info for voting
-                    if (parts.Length != 2) return;
-                    VoteInfoCommand(parts[1]);
+                    if (parts.Length != 1) return;
+                    VoteInfoCommand(parts[0]);
                     break;
                 case "vote": // Vote for existing voting
-                    if (parts.Length != 3) return;
-                    VoteCommand(user, parts[1], parts[2]);
+                    if (parts.Length != 2) return;
+                    VoteCommand(user, parts[0], parts[1]);
                     break;
                 case "addvoting": // Create new voting
-                    if (parts.Length != 4 || !isMod || !int.TryParse(parts[3], out int milliseconds)) return;
+                    if (parts.Length != 3 || !isMod || !int.TryParse(parts[2], out int milliseconds)) return;
                     AddVotingCommand(parts[1], parts[2].Split('|'), milliseconds);
                     break;
                 case "editvotetime": // Change time for voting
-                    if (parts.Length != 2 || !isMod || !int.TryParse(parts[3], out milliseconds)) return;
+                    if (parts.Length != 1 || !isMod || !int.TryParse(parts[2], out milliseconds)) return;
                     EditVotetimeCommand(parts[1], milliseconds);
                     break;
                 case "deletevoting": // Remove voting
-                    if (parts.Length != 2 || !isMod) return;
+                    if (parts.Length != 1 || !isMod) return;
                     RemoveVoting(parts[1]);
                     break;
                 case "votings": // Existing votings

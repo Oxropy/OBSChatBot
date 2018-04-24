@@ -42,7 +42,7 @@ namespace OBSChatBot
                     return;
                 }
 
-                StartBot(directory, config);
+                StartBot(directory, config).Wait();
             }
             catch (Exception ex)
             {
@@ -51,7 +51,7 @@ namespace OBSChatBot
             }
         }
 
-        private static async void StartBot(string directory, Config config)
+        private static async Task StartBot(string directory, Config config)
         {
             string accessToken = string.Empty;
             string path = Path.Combine(directory, "Token.txt");
@@ -94,7 +94,7 @@ namespace OBSChatBot
 
             if (result is SuccessfulAuthentication success)
             {
-                await RunBot(success.Name, success.Token, config);
+                await RunBot(directory, success.Token, config);
             }
         }
 
@@ -128,7 +128,7 @@ namespace OBSChatBot
                 }
                 else
                 {
-                    votings.ProcessMessage(new Tuple<bool, string, string[]>(c.Message.IsModerator, c.Message.Username, c.Args));
+                    votings.ProcessMessage(new Tuple<bool, string, string, string[]>(c.Message.IsModerator, c.Message.Username, c.Name, c.Args));
                 }
             });
         }
